@@ -77,7 +77,15 @@ button,input,textarea,select{font:inherit;color:inherit}
 .login-card{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px}
 .login-panel{background:var(--brand);color:var(--brand-ink);border:4px double #c9d6ea;padding:22px 22px 18px;display:flex;flex-direction:column;align-items:center;gap:14px;box-shadow:var(--shadow)}
 .login-panel img{width:100%;max-width:330px;height:auto;display:block}
-.login-panel input{background:#fff;color:#111;border:0;border-radius:2px;text-align:center;font-size:1.05rem;padding:12px}
+.login-panel input,.login-panel input[type=password],.login-panel input:not([type]){background:#fff!important;color:#111!important;-webkit-text-fill-color:#111;caret-color:#111;border:0;border-radius:2px;text-align:center;font-size:1.15rem;padding:12px;color-scheme:light}
+.login-panel input::placeholder{color:#8a94a3;-webkit-text-fill-color:#8a94a3;opacity:1}
+.login-panel input:-webkit-autofill{-webkit-box-shadow:0 0 0 40px #fff inset;-webkit-text-fill-color:#111}
+.pwbox{position:relative;width:100%}
+.pwbox input[type=password]{color:transparent!important;-webkit-text-fill-color:transparent;caret-color:transparent;letter-spacing:0}
+.pwbox input:-webkit-autofill{-webkit-text-fill-color:transparent}
+.pwmask{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;color:#111;font:700 1.35rem/1 ui-monospace,Consolas,monospace;letter-spacing:.18em;overflow:hidden;white-space:nowrap}
+.pwmask.on::after{content:"";display:inline-block;width:2px;height:1.2em;background:#111;margin-left:2px;animation:pwblink 1s steps(1) infinite}
+@keyframes pwblink{50%{opacity:0}}
 .login-panel label{font:700 1.4rem var(--f-display);letter-spacing:.04em;text-align:center;display:block}
 .login-panel label small{display:block;font:400 .95rem var(--f-body);letter-spacing:0;opacity:.9}
 .login-panel .lf{width:100%;display:flex;flex-direction:column;gap:6px}
@@ -885,7 +893,7 @@ function renderLogin(){
   $('#app').innerHTML='<div class="login"><form class="login-card" id="loginForm" autocomplete="off">'+
     '<div class="login-panel"><img src="'+LOGO.login+'" alt="Servicios Públicos Sociedad del Estado · Control de Usina">'+
     (hayUsers?'<div class="lf"><input id="lgUser" aria-describedby="lgLbl" autocapitalize="off" spellcheck="false" placeholder="3618-mgr-ADMIN.SUP.PRIN."><label id="lgLbl" for="lgUser">USUARIO<small>(Legajo-Iniciales-Cargo)</small></label></div>'+
-      '<div class="lf" id="lgClaveBox" hidden><input id="lgClave" type="password" autocomplete="current-password"><label for="lgClave" id="lgClaveLbl">CONTRASEÑA</label></div>'
+      '<div class="lf" id="lgClaveBox" hidden><div class="pwbox"><input id="lgClave" type="password" autocomplete="current-password" aria-describedby="lgClaveLbl"><span class="pwmask" id="lgMask" aria-hidden="true"></span></div><label for="lgClave" id="lgClaveLbl">CONTRASEÑA</label></div>'
       :'<p style="text-align:center;margin:0">Este dispositivo todavía no está conectado al sistema.</p>')+
     '<div class="login-msg" id="lgMsg" role="alert"></div></div>'+
     '<div class="login-foot">'+(hayUsers?'<button class="linkbtn" type="button" id="lgSetup">Conectar con el servidor</button><button class="btn brand" type="submit">Ingresar</button>':'<button class="btn" type="button" id="lgDemo">Ver demostración</button><button class="btn brand" type="button" id="lgSetup">Conectar con el servidor</button>')+'</div>'+
@@ -895,7 +903,9 @@ function renderLogin(){
   if($('#lgDemo'))$('#lgDemo').addEventListener('click',function(){entrarDemo();});
   $('#lgSetup').addEventListener('click',modalServidor);
   if(!hayUsers)return;
-  var uIn=$('#lgUser'),box=$('#lgClaveBox'),msg=$('#lgMsg');uIn.focus();
+  var uIn=$('#lgUser'),box=$('#lgClaveBox'),msg=$('#lgMsg'),cIn=$('#lgClave'),mk=$('#lgMask');uIn.focus();
+  function pintarMask(){mk.textContent='*'.repeat(cIn.value.length);mk.classList.toggle('on',document.activeElement===cIn);}
+  ['input','focus','blur','change'].forEach(function(ev){cIn.addEventListener(ev,pintarMask);});setTimeout(pintarMask,600);
   uIn.addEventListener('input',function(){msg.textContent='';var r=findUser(uIn.value),c=r.u?catL(r.u):'';box.hidden=!(c==='A'||c==='B');$('#lgClaveLbl').textContent=c==='B'?'PIN':'CONTRASEÑA';$('#lgClave').inputMode=c==='B'?'numeric':'text';});
   f.addEventListener('submit',function(e){e.preventDefault();var r=findUser(uIn.value);if(r.err){msg.textContent=r.err;return;}
     var u=r.u,c=catL(u),cl=$('#lgClave').value;
