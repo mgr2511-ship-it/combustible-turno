@@ -1,5 +1,5 @@
 // Control de Usina: funcionamiento sin internet
-const CACHE = 'cdu-v5';
+const CACHE = 'cdu-v6';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon.png'];
 
 self.addEventListener('install', e => {
@@ -13,7 +13,8 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.hostname.endsWith('google.com') || url.hostname.endsWith('googleusercontent.com') || url.pathname.endsWith('/exec')) return; // sincronización: siempre por red
+  const fuente = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
+  if ((url.origin !== self.location.origin && !fuente) || url.pathname.endsWith('/exec')) return; // servidor y clima: siempre por red
   if (req.mode === 'navigate') {
     // Primero la red (para recibir actualizaciones); sin señal, la copia guardada
     e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put('./index.html', c)); return r; })
