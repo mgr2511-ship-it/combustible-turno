@@ -357,6 +357,19 @@ details.ctab{margin-top:6px}details.ctab summary{cursor:pointer;color:var(--acce
 .hint.warn{color:#9a6a12;font-weight:600}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hint.warn{color:#e0a940}}
 :root[data-theme="dark"] .hint.warn{color:#e0a940}
+.chart,.chart svg{touch-action:pan-y}.chart svg{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.chart svg rect:focus{outline:none}
+
+/* barra de secciones: en el celular una sola fila que se desliza de costado */
+.navtabs{display:contents}
+@media (max-width:760px){
+  .tabsbar .wrap{padding-block:4px;gap:2px}
+  .navtabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:2px;width:100%;scrollbar-width:none;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);padding-right:24px}
+  .navtabs::-webkit-scrollbar{display:none}
+  .navtab{white-space:nowrap;flex:none;padding:8px 10px}
+  .distsel{margin-left:0;width:100%;padding-bottom:2px}
+}
+/* celular de costado (poca altura): la barra no queda fija para dejar lugar a los gráficos */
+@media (max-height:500px){.tabsbar{position:static}}
 </style>
 </head>
 <body>
@@ -1018,8 +1031,8 @@ function renderShell(){
     '<div class="tb-right"><div class="who"><b>'+esc(u.nombre)+'</b>'+esc(u.legajo+' · '+cargo(u.cat).abrev+' · '+u.cat)+'</div><span id="syncPill" class="pill">…</span><button class="ghost small" id="btnSalir" type="button">Salir</button></div></div></header>';
   var nav='';
   if(VIEW!=='editor'){
-    nav='<nav class="tabsbar" aria-label="Secciones"><div class="wrap '+(c==='C'?'':'wide')+'">'+tabs.map(function(t){var b=t[0]==='solic'&&nSol?'<span class="badge">'+nSol+'</span>':t[0]==='informes'&&nInf?'<span class="badge">'+nInf+'</span>':'';
-      return '<button class="navtab" type="button" data-view="'+t[0]+'" aria-current="'+(VIEW===t[0]?'page':'false')+'">'+t[1]+b+'</button>';}).join('')+
+    nav='<nav class="tabsbar" aria-label="Secciones"><div class="wrap '+(c==='C'?'':'wide')+'"><div class="navtabs">'+tabs.map(function(t){var b=t[0]==='solic'&&nSol?'<span class="badge">'+nSol+'</span>':t[0]==='informes'&&nInf?'<span class="badge">'+nInf+'</span>':'';
+      return '<button class="navtab" type="button" data-view="'+t[0]+'" aria-current="'+(VIEW===t[0]?'page':'false')+'">'+t[1]+b+'</button>';}).join('')+'</div>'+
       (c!=='C'&&ds.length>1?'<label class="distsel">Distrito <select id="selDist">'+ds.map(function(d){return '<option value="'+d+'"'+(d===SELD?' selected':'')+'>'+esc(distName(d))+'</option>';}).join('')+'</select></label>':c!=='C'?'<span class="distsel">'+esc(distName(SELD))+'</span>':'')+
       '</div></nav>';
   }
@@ -1033,6 +1046,7 @@ function render(){
   if(c==='C'&&cfg.devDist!==u.dist[0]){cfg.devDist=u.dist[0];saveCfg();}
   app.innerHTML=renderShell()+'<main id="main"></main><footer class="actionbar" id="abar" hidden></footer>';
   var main=$('#main'),ab=$('#abar');
+  var nt=$('.navtabs'),na=nt&&nt.querySelector('[aria-current="page"]');if(nt&&na&&nt.scrollWidth>nt.clientWidth)nt.scrollLeft=Math.max(0,na.offsetLeft-nt.offsetLeft-(nt.clientWidth-na.offsetWidth)/2);
   if(histOn()&&VIEW!=='editor')main.insertAdjacentHTML('beforebegin','<div class="wrap wide"><div class="banner hist"><span><b>Modo histórico activo.</b> Lo que cargues queda a nombre de Robot-Histórico (legajo 0000), cargado por '+esc(u.nombre)+'.</span><button class="ghost small" type="button" data-view="hist">Ir a Histórico</button></div></div>');
   if(VIEW==='turno'||VIEW==='editor'){
     if(VIEW==='turno'&&(!DR||DR.dist!==u.dist[0]))loadDraft(u.dist[0],true);
@@ -2361,6 +2375,25 @@ function niceMax(v){if(!(v>0))return 1;var e=Math.pow(10,Math.floor(Math.log10(v
 function niceTicks(lo,hi,n){var span=hi-lo||1,step=niceMax(span/(n||4)),a=Math.floor(lo/step)*step,o=[];for(var v=a;v<hi+step*0.999;v+=step)o.push(r2(v));if(o.length<2)o.push(r2(a+step));return o;}
 function kfmt(v){var a=Math.abs(v);return a>=1e6?fmt(Math.round(v/1e5)/10)+' M':a>=1000?fmt(Math.round(v/100)/10)+' k':fmt(v);}
 function svgEl(n,a){var e=document.createElementNS('http://www.w3.org/2000/svg',n);for(var k in a)e.setAttribute(k,a[k]);return e;}
+
+/* ---------- interacción común mouse / dedo ----------
+   mouse: se ve al pasar y se oculta al salir.
+   dedo: tocar o deslizar de costado muestra el dato y QUEDA fijo; se oculta tocando fuera del gráfico.
+   El desplazamiento vertical de la página sigue funcionando (touch-action: pan-y). */
+var chartHides=[],chartTecla=false;
+document.addEventListener('keydown',function(){chartTecla=true;},true);
+document.addEventListener('pointerdown',function(e){chartTecla=false;if(e.pointerType==='mouse')return;chartHides=chartHides.filter(function(h){return h.box.isConnected;});chartHides.forEach(function(h){if(!h.box.contains(e.target))h.hide();});},true);
+function interactuar(box,hit,o){
+  var tocando=false;chartHides.push({box:box,hide:o.hide});
+  hit.style.touchAction='pan-y';
+  hit.addEventListener('pointerdown',function(e){tocando=e.pointerType!=='mouse';if(tocando){o.show(o.pick(e,true));}});
+  hit.addEventListener('pointermove',function(e){if(e.pointerType==='mouse'||e.buttons||e.pressure>0)o.show(o.pick(e,e.pointerType!=='mouse'));});
+  hit.addEventListener('pointerleave',function(e){if(e.pointerType==='mouse')o.hide();});
+  hit.addEventListener('pointerup',function(){setTimeout(function(){tocando=false;},0);});
+  hit.addEventListener('focus',function(){if(chartTecla&&o.kb)o.kb();});
+}
+/** ubica el cartel del lado contrario al dedo/cursor para que no lo tape */
+function ubicarTip(tip,box,px){var bw=box.clientWidth,w=tip.offsetWidth,l=px>bw/2?px-w-16:px+16;tip.style.left=Math.min(Math.max(4,l),bw-w-4)+'px';tip.style.top='4px';}
 /* gráfico de líneas con cruz de lectura; cfg: {xs:[fecha], series:[{n,cls,v:[]}], band:{lo:[],hi:[],cls}, unidad, h} */
 function chartLine(box,c){
   var W=box.clientWidth||800,H=c.h||220,m={l:52,r:14,t:12,b:26},iw=W-m.l-m.r,ih=H-m.t-m.b,n=c.xs.length;box.innerHTML='';box.style.position='relative';
@@ -2383,12 +2416,14 @@ function chartLine(box,c){
     tip.textContent='';var h=document.createElement('div');h.className='th';h.textContent=c.xtip?c.xtip(c.xs[i]):c.xs[i];tip.appendChild(h);
     c.series.forEach(function(se){var r=document.createElement('div');r.className='tr';var k2=document.createElement('i');k2.className='key '+se.cls;var b=document.createElement('b');b.textContent=se.v[i]==null?'—':fmt(Math.round(se.v[i]*10)/10)+' '+(c.unidad||'');var sp=document.createElement('span');sp.textContent=se.n;r.appendChild(k2);r.appendChild(b);r.appendChild(sp);tip.appendChild(r);});
     if(c.band&&c.band.hi[i]!=null){var r3=document.createElement('div');r3.className='tr';r3.innerHTML='<i class="key band '+c.band.cls+'"></i>';var b3=document.createElement('b');b3.textContent=fmt(c.band.lo[i])+' a '+fmt(c.band.hi[i])+' '+(c.unidad||'');var s3=document.createElement('span');s3.textContent=c.band.n||'';r3.appendChild(b3);r3.appendChild(s3);tip.appendChild(r3);}
-    tip.hidden=false;var bw=box.clientWidth,px=x/W*bw;tip.style.left=Math.min(Math.max(4,px+12),bw-tip.offsetWidth-4)+'px';tip.style.top='4px';
+    tip.hidden=false;ubicarTip(tip,box,x/W*box.clientWidth);kb=i;
     if(c.onHover)c.onHover(i);}
-  function at(ev){var r=s.getBoundingClientRect(),x=(ev.clientX-r.left)/r.width*W;return Math.round((x-m.l)/(iw||1)*(n-1));}
-  hit.addEventListener('pointermove',function(e){show(at(e));});hit.addEventListener('pointerleave',function(){cross.setAttribute('visibility','hidden');dots.forEach(function(d){d.setAttribute('visibility','hidden');});tip.hidden=true;});
-  var kb=n-1;hit.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){kb=Math.max(0,kb-1);show(kb);}else if(e.key==='ArrowRight'){kb=Math.min(n-1,kb+1);show(kb);}});hit.addEventListener('focus',function(){show(kb);});
-  box._show=show;return box;
+  function hide(){cross.setAttribute('visibility','hidden');dots.forEach(function(d){d.setAttribute('visibility','hidden');});tip.hidden=true;if(c.onHide)c.onHide();}
+  function at(ev){var r=s.getBoundingClientRect(),x=(ev.clientX-r.left)/r.width*W;return Math.min(n-1,Math.max(0,Math.round((x-m.l)/(iw||1)*(n-1))));}
+  var kb=n-1;interactuar(box,hit,{pick:at,show:show,hide:hide,kb:function(){show(kb);}});
+  hit.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){show(Math.max(0,kb-1));}else if(e.key==='ArrowRight'){show(Math.min(n-1,kb+1));}else if(e.key==='Escape')hide();});
+  hit.addEventListener('blur',function(){if(chartTecla)hide();});
+  box._show=show;box._hide=function(){cross.setAttribute('visibility','hidden');dots.forEach(function(d){d.setAttribute('visibility','hidden');});tip.hidden=true;};return box;
 }
 /* barras agrupadas: cats:[lbl], series:[{n,cls,v:[]}], diverge:true para valores con signo */
 function chartBars(box,c){
@@ -2397,16 +2432,22 @@ function chartBars(box,c){
   var Y=function(v){return m.t+ih-(v-lo)/(hi-lo||1)*ih;},band=iw/nc,bw=Math.min(24,(band*0.7-(ns-1)*2)/ns);
   var s=svgEl('svg',{viewBox:'0 0 '+W+' '+H,width:'100%',height:H,role:'img','aria-label':c.titulo||''});
   tk.forEach(function(v){s.appendChild(svgEl('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),class:v===0?'base':'gl'}));var t=svgEl('text',{x:m.l-6,y:Y(v)+4,'text-anchor':'end',class:'ax'});t.textContent=kfmt(v);s.appendChild(t);});
-  var tip=document.createElement('div');tip.className='ctip';tip.hidden=true;
+  var tip=document.createElement('div'),barras=[],actual=null,tocandoB=false;tip.className='ctip';tip.hidden=true;
+  function ocultar(){tip.hidden=true;if(actual)actual.p.classList.remove('hov');actual=null;}
+  function mostrar(b){if(!b){ocultar();return;}if(actual&&actual!==b)actual.p.classList.remove('hov');actual=b;var v=b.v,se=b.se,i=b.i,q=b.q;
+    tip.textContent='';var h=document.createElement('div');h.className='th';h.textContent=c.cats[i]+(ns>1?' · '+se.n:'');var r2_=document.createElement('div');r2_.className='tr';var bb=document.createElement('b');bb.textContent=(c.diverge&&v>0?'+':'')+fmt(v)+' '+(c.unidad||'');r2_.appendChild(bb);
+    if(c.extra){var sp=document.createElement('span');sp.textContent=c.extra(i,q);r2_.appendChild(sp);}tip.appendChild(h);tip.appendChild(r2_);tip.hidden=false;b.p.classList.add('hov');ubicarTip(tip,box,(b.x+b.bw/2)/W*box.clientWidth);}
   c.cats.forEach(function(cat,i){var x0=m.l+i*band+(band-(ns*bw+(ns-1)*2))/2,t=svgEl('text',{x:m.l+i*band+band/2,y:H-9,'text-anchor':'middle',class:'ax'});t.textContent=cat;s.appendChild(t);
     c.series.forEach(function(se,q){var v=se.v[i];if(v==null)return;var x=x0+q*(bw+2),y1=Y(Math.max(v,0)),y0=Y(Math.min(v,0)),hgt=Math.max(1,y0-y1),r=Math.min(4,hgt/2,bw/2),cls=c.diverge?(v<0?'neg':'pos'):se.cls;
       var d=v>=0?'M'+x+','+(y1+hgt)+'V'+(y1+r)+'Q'+x+','+y1+' '+(x+r)+','+y1+'H'+(x+bw-r)+'Q'+(x+bw)+','+y1+' '+(x+bw)+','+(y1+r)+'V'+(y1+hgt)+'Z':'M'+x+','+y1+'V'+(y0-r)+'Q'+x+','+y0+' '+(x+r)+','+y0+'H'+(x+bw-r)+'Q'+(x+bw)+','+y0+' '+(x+bw)+','+(y0-r)+'V'+y1+'Z';
-      var p=svgEl('path',{d:d,class:'bar '+cls,tabindex:0});var hit=svgEl('rect',{x:x-2,y:m.t,width:bw+4,height:ih,fill:'transparent'});
-      var on=function(){tip.textContent='';var h=document.createElement('div');h.className='th';h.textContent=cat+(ns>1?' · '+se.n:'');var r2_=document.createElement('div');r2_.className='tr';var b=document.createElement('b');b.textContent=(c.diverge&&v>0?'+':'')+fmt(v)+' '+(c.unidad||'');r2_.appendChild(b);if(c.extra){var sp=document.createElement('span');sp.textContent=c.extra(i,q);r2_.appendChild(sp);}tip.appendChild(h);tip.appendChild(r2_);tip.hidden=false;p.classList.add('hov');var bwid=box.clientWidth;tip.style.left=Math.min(Math.max(4,(x+bw)/W*bwid+8),bwid-tip.offsetWidth-4)+'px';tip.style.top='4px';};
-      var off=function(){tip.hidden=true;p.classList.remove('hov');};
-      [p,hit].forEach(function(el){el.addEventListener('pointerenter',on);el.addEventListener('pointerleave',off);});p.addEventListener('focus',on);p.addEventListener('blur',off);
-      s.appendChild(p);s.appendChild(hit);
+      var p=svgEl('path',{d:d,class:'bar '+cls,tabindex:0});barras.push({x:x,bw:bw,i:i,q:q,v:v,se:se,p:p});
+      p.addEventListener('focus',function(){if(chartTecla)mostrar(barras.length&&barras.filter(function(b){return b.p===p;})[0]);});p.addEventListener('blur',function(){if(chartTecla)ocultar();});
+      s.appendChild(p);
       if(c.etiquetas){var lt=svgEl('text',{x:x+bw/2,y:v>=0?y1-4:y0+12,'text-anchor':'middle',class:'vl'});lt.textContent=kfmt(v);s.appendChild(lt);}});});
+  var hitB=svgEl('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});s.appendChild(hitB);
+  hitB.addEventListener('pointerdown',function(e){tocandoB=e.pointerType!=='mouse';});
+  interactuar(box,hitB,{pick:function(ev){var r=s.getBoundingClientRect(),px=(ev.clientX-r.left)/r.width*W,ci=Math.floor((px-m.l)/band),best=null,bd=1e9;
+      barras.forEach(function(b){if(b.i!==ci)return;var dd=Math.abs(b.x+b.bw/2-px);if(dd<bd){bd=dd;best=b;}});return best;},show:mostrar,hide:ocultar});
   box.appendChild(s);box.appendChild(tip);return box;
 }
 function chartScatter(box,c){
@@ -2424,12 +2465,14 @@ function chartScatter(box,c){
   if(c.fit){gpt.appendChild(svgEl('line',{x1:X(x0),y1:Y(c.fit.a+c.fit.b*x0),x2:X(x1),y2:Y(c.fit.a+c.fit.b*x1),class:'ln s2'}));}
   var hit=svgEl('rect',{x:m.l,y:m.t,width:iw,height:ih,fill:'transparent'});s.appendChild(hit);
   var ring=svgEl('circle',{r:7,class:'ring',visibility:'hidden'});s.appendChild(ring);
-  hit.addEventListener('pointermove',function(e){var r=s.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*W,py=(e.clientY-r.top)/r.height*H,best=null,bd=1e9;
-    c.pts.forEach(function(p){var dx=X(p[0])-px,dy=Y(p[1])-py,dd=dx*dx+dy*dy;if(dd<bd){bd=dd;best=p;}});if(!best||bd>900){tip.hidden=true;ring.setAttribute('visibility','hidden');return;}
+  function pick(e,dedo){var r=s.getBoundingClientRect(),k=W/r.width,px=(e.clientX-r.left)*k,py=(e.clientY-r.top)*(H/r.height),best=null,bd=1e9,tol=(dedo?44:30)*k;
+    c.pts.forEach(function(p){var dx=X(p[0])-px,dy=Y(p[1])-py,dd=dx*dx+dy*dy;if(dd<bd){bd=dd;best=p;}});return best&&bd<=tol*tol?best:null;}
+  function hide(){tip.hidden=true;ring.setAttribute('visibility','hidden');}
+  function show(best){if(!best){hide();return;}
     ring.setAttribute('cx',X(best[0]));ring.setAttribute('cy',Y(best[1]));ring.setAttribute('visibility','visible');tip.textContent='';var h=document.createElement('div');h.className='th';h.textContent=fFecha(best[2]);
     var a=document.createElement('div');a.className='tr';var b=document.createElement('b');b.textContent=fmt(best[1])+' L';var sp=document.createElement('span');sp.textContent=fmt(best[0])+' °C de temperatura media';a.appendChild(b);a.appendChild(sp);tip.appendChild(h);tip.appendChild(a);tip.hidden=false;
-    var bw=box.clientWidth;tip.style.left=Math.min(Math.max(4,X(best[0])/W*bw+10),bw-tip.offsetWidth-4)+'px';tip.style.top='4px';});
-  hit.addEventListener('pointerleave',function(){tip.hidden=true;ring.setAttribute('visibility','hidden');});
+    ubicarTip(tip,box,X(best[0])/W*box.clientWidth);}
+  interactuar(box,hit,{pick:pick,show:show,hide:hide});
   box.appendChild(s);box.appendChild(tip);return box;
 }
 function leyenda(items){return '<div class="cleg">'+items.map(function(x){return '<span><i class="key '+x[0]+'"></i>'+esc(x[1])+'</span>';}).join('')+'</div>';}
@@ -2456,7 +2499,7 @@ function cargarDash(dist,desde,manual){
     if(manual&&!e1&&!e2)toast('Dashboard actualizado.');pintarDash(dist,desde);});
 }
 function pintarDash(dist,desde){
-  var body=$('#dsBody');if(!body)return;body.classList.remove('cargando');
+  var body=$('#dsBody');if(!body)return;body.classList.remove('cargando');dashDesde=desde;dashW=body.clientWidth;
   var hoy=todayISO(),s=serieDiaria(dist),cl=getClima(dist).d,fs=[];for(var f=desde;f<=hoy;f=addDays(f,1))fs.push(f);
   var cons=fs.map(function(f){var x=s[f];return x&&x.completo?x.dec:null;}),prom=cons.map(function(v,i){var w=cons.slice(Math.max(0,i-6),i+1).filter(function(z){return z!=null;});return w.length>=4?sum(w)/w.length:null;});
   var tmed=fs.map(function(f){return cl[f]?cl[f][2]:null;}),tmin=fs.map(function(f){return cl[f]?cl[f][0]:null;}),tmax=fs.map(function(f){return cl[f]?cl[f][1]:null;});
@@ -2478,11 +2521,11 @@ function pintarDash(dist,desde){
   var m=modelo(dist),fut=[];for(var i=0;i<16;i++){var ff=addDays(hoy,i);if(cl[ff])fut.push(ff);}
   body.innerHTML=tiles+
     '<div class="card block"><h4>Consumo diario</h4><p class="hint">Consumo declarado con la corrección del superior, por día completo. La línea fina es el promedio de 7 días.</p>'+leyenda([['s1','Consumo del día'],['s2 fino','Promedio de 7 días']])+'<div id="chCons" class="chart"></div>'+
-      '<h4>Temperatura en '+esc(D(dist).n)+'</h4><p class="hint">Temperatura media del día y franja entre la mínima y la máxima. Pasá el mouse por cualquiera de los dos gráficos: la fecha se marca en ambos.</p>'+leyenda([['s3','Temperatura media'],['band s3','Mínima a máxima']])+'<div id="chTemp" class="chart"></div>'+
+      '<h4>Temperatura en '+esc(D(dist).n)+'</h4><p class="hint">Temperatura media del día y franja entre la mínima y la máxima. Pasá el mouse, o tocá y deslizá el dedo de costado, por cualquiera de los dos gráficos: la fecha se marca en ambos. En el celular el dato queda fijo hasta que tocás fuera del gráfico.</p>'+leyenda([['s3','Temperatura media'],['band s3','Mínima a máxima']])+'<div id="chTemp" class="chart"></div>'+
       tablaHTML(['Fecha','Consumo (L)','Promedio 7 días (L)','Mínima (°C)','Media (°C)','Máxima (°C)'],fs.slice().reverse().filter(function(f,i){var j=fs.length-1-i;return cons[j]!=null||tmed[j]!=null;}).map(function(f){var j=fs.indexOf(f);return [fFecha(f),cons[j],prom[j]!=null?Math.round(prom[j]):null,tmin[j],tmed[j],tmax[j]];}))+'</div>'+
     '<div class="grid2"><div class="card block"><h4>Consumo por mes</h4>'+(anios.length>1?leyenda(anios.map(function(a,i){return [cls[i],a];})):'<p class="hint">'+(anios[0]||'')+' · cuando estén cargados otros años aparecen al lado para comparar.</p>')+'<div id="chMes" class="chart"></div>'+
       tablaHTML(['Mes'].concat(anios),MESES.map(function(mm,i){return [mm].concat(anios.map(function(a){var o=porMes[a+'-'+pad2(i+1)];return o&&o.n?Math.round(o.c):null;}));}))+'</div>'+
-    '<div class="card block"><h4>Camiones por mes</h4><p class="hint">Litros ingresados; la cantidad de camiones se ve al pasar el mouse.</p><div id="chCam" class="chart"></div>'+
+    '<div class="card block"><h4>Camiones por mes</h4><p class="hint">Litros ingresados; la cantidad de camiones se ve al pasar el mouse o al tocar la barra.</p><div id="chCam" class="chart"></div>'+
       tablaHTML(['Mes','Camiones','Litros'],Object.keys(porMes).sort().slice(-12).map(function(k){return [fMes(k),porMes[k].cam,porMes[k].ing];}))+'</div></div>'+
     '<div class="grid2"><div class="card block"><h4>Consumo según la temperatura</h4>'+(m?'<p class="hint">'+m.n+' días. '+(m.r2>=0.2?(m.b<0?'Por cada grado menos de temperatura media, el consumo sube unos <b>'+fmt(Math.round(-m.b)):'Por cada grado más de temperatura media, el consumo sube unos <b>'+fmt(Math.round(m.b)))+' L por día</b> (R² '+fmt(Math.round(m.r2*100)/100,true)+').':'La temperatura explica poco del consumo en estos datos (R² '+fmt(Math.round(m.r2*100)/100,true)+'): el pronóstico usa el promedio.')+'</p>'+leyenda([['s1','Día'],['s2','Tendencia']])+'<div id="chSc" class="chart"></div>':'<p class="hint">Hacen falta al menos 30 días completos con temperatura para estimar la relación.</p>')+'</div>'+
     '<div class="card block"><h4>Pronóstico de 16 días</h4>'+(fut.length?'<div class="tablewrap"><table><thead><tr><th>Día</th><th>Mínima</th><th>Máxima</th><th>Consumo estimado</th></tr></thead><tbody>'+fut.map(function(ff){var t=cl[ff],pc=predConsumo(dist,ff);return '<tr><td>'+DIAS_SEM[(diaSemana(ff)+5)%7]+' '+fFecha(ff).slice(0,5)+'</td><td class="n">'+fmt(t[0])+' °C</td><td class="n">'+fmt(t[1])+' °C</td><td class="n">'+(pc!=null?fmt(pc)+' L':'—')+'</td></tr>';}).join('')+'</tbody></table></div><p class="hint">El consumo estimado se usa en «Sugerir programa» del pedido semanal.</p>':'<p class="hint">Sin pronóstico: tocá «Actualizar datos» con internet.</p>')+'</div></div>'+
@@ -2491,7 +2534,7 @@ function pintarDash(dist,desde){
     '<p class="hint">Datos meteorológicos: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0), reanálisis ERA5 de Copernicus. Ubicación: '+esc((coordsDe(dist)||{}).fuente||'a buscar por nombre')+'.</p>';
   var xl=function(f){return f.slice(8,10)+'/'+f.slice(5,7);},hi=fs.length-1;
   var c1=$('#chCons'),c2=$('#chTemp');
-  chartLine(c1,{xs:fs,series:[{n:'Consumo del día',cls:'s1',v:cons},{n:'Promedio de 7 días',cls:'s2',v:prom,fino:true}],unidad:'L',xlbl:xl,xtip:fFecha,cero:true,titulo:'Consumo diario',onHover:function(i){if(c2._show)c2._show(i);}});
+  chartLine(c1,{xs:fs,series:[{n:'Consumo del día',cls:'s1',v:cons},{n:'Promedio de 7 días',cls:'s2',v:prom,fino:true}],unidad:'L',xlbl:xl,xtip:fFecha,cero:true,titulo:'Consumo diario',onHover:function(i){if(c2._show)c2._show(i);},onHide:function(){if(c2._hide)c2._hide();}});
   chartLine(c2,{xs:fs,series:[{n:'Temperatura media',cls:'s3',v:tmed}],band:{lo:tmin,hi:tmax,cls:'s3',n:'Mínima a máxima'},unidad:'°C',xlbl:xl,xtip:fFecha,h:170,titulo:'Temperatura'});
   var meses=MESES.map(function(x){return x.slice(0,3);});
   chartBars($('#chMes'),{cats:meses,series:anios.map(function(a,i){return {n:a,cls:cls[i],v:MESES.map(function(x,j){var o=porMes[a+'-'+pad2(j+1)];return o&&o.n?Math.round(o.c):null;})};}),unidad:'L',titulo:'Consumo por mes'});
@@ -2499,6 +2542,10 @@ function pintarDash(dist,desde){
   if(m&&$('#chSc'))chartScatter($('#chSc'),{pts:m.pts,fit:m.r2>=0.05?m:null,xtit:'Temperatura media del día',titulo:'Consumo según la temperatura'});
   if(!cfs.length)$('#chCF').innerHTML='<p class="hint">Todavía no hay controles físicos guardados de este distrito.</p>';else chartBars($('#chCF'),{cats:cfs.map(function(x){return MESES[+x.mes.slice(5,7)-1].slice(0,3);}),series:[{n:'Diferencia',cls:'pos',v:cfs.map(function(x){return x.calc.dif;})}],diverge:true,unidad:'L',etiquetas:true,titulo:'Diferencia por mes'});
 }
+
+/* al girar el celular o cambiar el ancho de la ventana se vuelven a dibujar los gráficos con el ancho real */
+var dashW=0,dashRz=null,dashDesde=null;
+window.addEventListener('resize',function(){clearTimeout(dashRz);dashRz=setTimeout(function(){var b=$('#dsBody');if(!b||VIEW!=='dash')return;var w=b.clientWidth;if(w&&Math.abs(w-dashW)>8){dashW=w;var y=window.scrollY;pintarDash(SELD,dashDesde||addDays(todayISO(),-364));window.scrollTo(0,y);}},180);});
 
 /* =====================================================================
    SINCRONIZACIÓN con Google Sheets (Apps Script)
