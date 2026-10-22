@@ -353,6 +353,10 @@ table.pgA td.pgcell{min-width:92px}table.pgA td.pgcell.falta{background:var(--wa
 .cleg .key.s1:not(.band),.cleg .key.s2,.cleg .key.s3:not(.band){}
 details.ctab{margin-top:6px}details.ctab summary{cursor:pointer;color:var(--accent);font-size:.88rem}
 .cargando{opacity:.55;transition:opacity .2s}
+
+.hint.warn{color:#9a6a12;font-weight:600}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .hint.warn{color:#e0a940}}
+:root[data-theme="dark"] .hint.warn{color:#e0a940}
 </style>
 </head>
 <body>
@@ -2313,7 +2317,21 @@ function getRes(dist){return sget('cpt.res.'+dist,{d:{},ts:null});}
 function cargarResumen(dist,desde){
   if(DEMO||!cfg.syncUrl||!navigator.onLine)return Promise.resolve(getRes(dist));
   getJSON({accion:'cf',distrito:dist}).then(function(r){var q=getQueue(),lc=getCFs(),ic={};lc.forEach(function(x,i){ic[x.id]=i;});(r.cfs||[]).forEach(function(x){if(q.some(function(y){return y.k==='cf'&&y.id===x.id;}))return;if(ic[x.id]!=null)lc[ic[x.id]]=x;else lc.push(x);});saveCFs(lc);}).catch(function(){});
-  return getJSON({accion:'resumen',distrito:dist,desde:desde}).then(function(res){var o={d:{},ts:new Date().toISOString(),desde:desde};(res.dias||[]).forEach(function(x){o.d[x.f]=x;});sset('cpt.res.'+dist,o);return o;});
+  return getJSON({accion:'resumen',distrito:dist,desde:desde}).then(function(res){
+    if(!Array.isArray(res.dias))return resumenPorMeses(dist,desde);   // servidor con Code.gs anterior a la v6
+    var o={d:{},ts:new Date().toISOString(),desde:desde,modo:'resumen'};res.dias.forEach(function(x){o.d[x.f]=x;});sset('cpt.res.'+dist,o);return o;});
+}
+var AVISO_V6='El servidor todavía tiene el Code.gs anterior (no responde «resumen»): traje los turnos mes por mes, que es más lento. Pegá el Code.gs v6 y hacé Implementar → Gestionar implementaciones → editar → Versión: Nueva versión.';
+/** respaldo: trae los turnos de cada mes (acción «turnos», existe desde la v4) y arma el resumen diario acá, sin guardarlos en el dispositivo */
+function resumenPorMeses(dist,desde){
+  var meses=[],m=desde.slice(0,7),fin=todayISO().slice(0,7);while(m<=fin){meses.push(m);var y=+m.slice(0,4),mm=+m.slice(5,7)+1;if(mm>12){mm=1;y++;}m=y+'-'+pad2(mm);}
+  var todos=[],ch=Promise.resolve();
+  for(var i=0;i<meses.length;i+=4)(function(g){ch=ch.then(function(){return Promise.all(g.map(function(mes){return getJSON({accion:'turnos',mes:mes,distrito:dist}).then(function(r){todos=todos.concat(r.turnos||[]);});}));});})(meses.slice(i,i+4));
+  return ch.then(function(){
+    var ids={};todos.forEach(function(r){ids[r.id]=1;});var map=mapTurnos(todos.concat(getTurnos(dist).filter(function(r){return !ids[r.id];}))),fs={},o={d:{},ts:new Date().toISOString(),desde:desde,modo:'meses',aviso:AVISO_V6};
+    todos.forEach(function(r){if(r.dist===dist&&r.fecha>=desde)fs[r.fecha]=1;});
+    Object.keys(fs).sort().forEach(function(f){var x=diaDe(map,dist,f);o.d[f]={f:f,n:x.t.filter(Boolean).length,dec:x.completo?x.corrDia:null,ex:x.exDia,med:x.med,ing:r2(x.ingMan+x.ingTar),cam:x.cams.length,completo:x.completo};});
+    sset('cpt.res.'+dist,o);return o;});
 }
 /** serie diaria: {f, dec (declarado+corrección), ex (por existencias), med, ing, cam, completo} */
 function serieDiaria(dist){
@@ -2417,11 +2435,13 @@ function chartScatter(box,c){
 function leyenda(items){return '<div class="cleg">'+items.map(function(x){return '<span><i class="key '+x[0]+'"></i>'+esc(x[1])+'</span>';}).join('')+'</div>';}
 function tablaHTML(cab,filas){return '<details class="ctab"><summary>Ver tabla</summary><div class="tablewrap"><table><thead><tr>'+cab.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>'+filas.map(function(f){return '<tr>'+f.map(function(v,i){return '<td'+(i?' class="n"':'')+'>'+(v==null?'—':esc(typeof v==='number'?fmt(v):v))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div></details>';}
 
+var dashMsg={};
 function viewDash(main){
   var dist=SELD,hoy=todayISO(),dias=dashRango==='todo'?1100:dashRango==='anio'?Math.round((new Date(hoy)-new Date(hoy.slice(0,4)+'-01-01'))/864e5)+1:+dashRango,desde=addDays(hoy,-dias+1);
   main.innerHTML='<div class="wrap wide panel dash"><div class="ptitle"><div><h1>Dashboard</h1><p>'+esc(distName(dist))+' · consumo, camiones, existencias y temperatura</p></div>'+
     '<div class="toolbar"><div class="field"><label for="dsR">Período</label><select id="dsR">'+[['90','Últimos 90 días'],['365','Últimos 12 meses'],['anio','Año '+hoy.slice(0,4)],['todo','Todo el histórico']].map(function(o){return '<option value="'+o[0]+'"'+(dashRango===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></div><button class="ghost" type="button" id="dsAct">Actualizar datos</button></div></div>'+
     '<p class="hint" id="dsMsg"></p><div id="dsBody"></div></div>';
+  if(dashMsg[dist]){$('#dsMsg').textContent=dashMsg[dist].t;$('#dsMsg').classList.toggle('warn',dashMsg[dist].w);}
   $('#dsR').addEventListener('change',function(e){dashRango=e.target.value;render();});
   $('#dsAct').addEventListener('click',function(){cargarDash(dist,desde,true);});
   pintarDash(dist,desde);
@@ -2430,9 +2450,9 @@ function viewDash(main){
 }
 function cargarDash(dist,desde,manual){
   var msg=$('#dsMsg');if(msg)msg.textContent='Trayendo datos del servidor y de Open-Meteo…';$('#dsBody')&&$('#dsBody').classList.add('cargando');
-  var e1=null,e2=null;
-  Promise.all([cargarResumen(dist,desde).catch(function(e){e1=e;}),cargarClima(dist,addDays(desde,-1)).catch(function(e){e2=e;})]).then(function(){
-    if(VIEW!=='dash'||SELD!==dist)return;var m=$('#dsMsg');if(m)m.textContent=(e1?'Consumo: '+e1.message+'. ':'')+(e2?'Temperatura: '+e2.message+'.':'');
+  var e1=null,e2=null,av='';
+  Promise.all([cargarResumen(dist,desde).then(function(o){av=o&&o.aviso||'';}).catch(function(e){e1=e;}),cargarClima(dist,addDays(desde,-1)).catch(function(e){e2=e;})]).then(function(){
+    if(VIEW!=='dash'||SELD!==dist)return;var m=$('#dsMsg');if(m){var ks=Object.keys(getRes(dist).d).sort(),cob=e1?'':ks.length?'Servidor: '+ks.length+' día(s) con datos, del '+fFecha(ks[0])+' al '+fFecha(ks[ks.length-1])+'. ':'El servidor no devolvió turnos de este distrito para el período. ';dashMsg[dist]={t:(e1?'Consumo: '+e1.message+'. ':'')+(e2?'Temperatura: '+e2.message+'. ':'')+cob+av,w:!!(e1||av)};m.textContent=dashMsg[dist].t;m.classList.toggle('warn',dashMsg[dist].w);}
     if(manual&&!e1&&!e2)toast('Dashboard actualizado.');pintarDash(dist,desde);});
 }
 function pintarDash(dist,desde){
