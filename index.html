@@ -379,6 +379,7 @@ table.cumpl th.cw,table.cumpl td.cw{padding:4px 2px;text-align:center;min-width:
 .cdot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--line)}
 .cdot.ok{background:var(--ok)}.cdot.tarde{background:var(--warn)}.cdot.ofi{background:var(--danger);opacity:.65}.cdot.no{background:var(--danger)}
 .cdot.ofi{box-shadow:inset 0 0 0 3px var(--sheet)}
+.pgA td .acc{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}.pgA td .acc .ghost{padding:3px 8px;font-size:.78rem}
 </style>
 </head>
 <body>
@@ -532,6 +533,7 @@ function upsertTurno(rec){var a=getTurnos();var i=-1;a.forEach(function(x,j){if(
 function getQueue(){return sget('cpt.queue',[]);}
 function queueAdd(k,id,extra){var q=getQueue();if(!q.some(function(x){return x.k===k&&x.id===id;}))q.push(Object.assign({k:k,id:id},extra||{}));sset('cpt.queue',q);}
 function queueDel(k,id){sset('cpt.queue',getQueue().filter(function(x){return !(x.k===k&&x.id===id);}));}
+function queueErr(k,id,msg){var q=getQueue();q.forEach(function(x){if(x.k===k&&x.id===id){if(msg){x.err=msg;x.errTs=new Date().toISOString();}else{delete x.err;delete x.errTs;}}});sset('cpt.queue',q);}
 function inQueue(k,id){return getQueue().some(function(x){return x.k===k&&x.id===id;});}
 function currentSlot(dist){
   var c=[],a=getTurnos(dist).filter(function(r){return !r.hist;});
@@ -2313,15 +2315,15 @@ function pedidosA(box){
   var jue=pedSem,dias=diasPedido(jue),ds=usinas(),tarde=new Date()>new Date(jue+'T23:59:59'),totDia=dias.map(function(){return 0;});
   var ops=getOPs().filter(function(o){return o.fechaDespacho>=dias[0]&&o.fechaDespacho<=dias[6];}),opDia={};ops.forEach(function(o){(opDia[o.dist+'#'+o.fechaDespacho]=opDia[o.dist+'#'+o.fechaDespacho]||[]).push(o);});
   var filas=ds.map(function(d){var p=getPedidos(d).filter(function(x){return x.id===idPG(d,jue);})[0],enviado=p&&p.estado!=='borrador';
-    return '<tr><td><b>'+esc(D(d).n)+'</b></td><td>'+(enviado?estadoPedido(p):(tarde?'<span class="chip r">No enviado</span>':'<span class="chip">Pendiente</span>'))+'</td><td class="n">'+(enviado?fmt(p.existencia):'')+'</td><td class="n">'+(enviado&&p.consumoDiario?fmt(Math.round(p.existencia/p.consumoDiario*10)/10):'')+'</td>'+
+    return '<tr><td><b>'+esc(D(d).n)+'</b><div class="acc">'+(enviado?'<button class="ghost small" type="button" data-ver="'+esc(p.id)+'">Ver</button>':'')+'<button class="ghost small" type="button" data-ofi="'+d+'">'+(enviado?'Editar':'Cargar por la oficina')+'</button></div></td><td>'+(enviado?estadoPedido(p):(tarde?'<span class="chip r">No enviado</span>':'<span class="chip">Pendiente</span>'))+'</td><td class="n">'+(enviado?fmt(p.existencia):'')+'</td><td class="n">'+(enviado&&p.consumoDiario?fmt(Math.round(p.existencia/p.consumoDiario*10)/10):'')+'</td>'+
       dias.map(function(f,i){var l=enviado?p.dias[i].litros:null,os=opDia[d+'#'+f]||[];if(l)totDia[i]+=l;
         return '<td class="n pgcell'+(l&&!os.length?' falta':'')+'"><button type="button" class="linkbtn" data-opn="'+d+'|'+f+'|'+(l||'')+'">'+(l?fmt(l):'+')+'</button>'+os.map(function(o){return '<div class="opchip" data-ope="'+esc(o.id)+'">OP '+esc(o.nPedido)+(o.grupo?' · '+esc(o.grupo):'')+'</div>';}).join('')+'</td>';}).join('')+
-      '<td class="n"><b>'+(enviado?fmt(sum(p.dias.map(function(x){return x.litros;}))):'')+'</b></td><td class="acc">'+(enviado?'<button class="ghost small" type="button" data-ver="'+esc(p.id)+'">Ver</button>':'')+'<button class="ghost small" type="button" data-ofi="'+d+'">'+(enviado?'Editar':'Cargar por la oficina')+'</button></td></tr>';}).join('');
+      '<td class="n"><b>'+(enviado?fmt(sum(p.dias.map(function(x){return x.litros;}))):'')+'</b></td></tr>';}).join('');
   var lubs=getPedidos().filter(function(x){return x.tipo==='lub'&&x.estado!=='borrador'&&x.estado!=='entregado';});
   box.innerHTML='<div class="card block"><h4>Programa semanal · pedidos del jueves '+fFecha(jue)+' para el '+fFecha(dias[0])+' al '+fFecha(dias[6])+'</h4>'+
     '<p class="hint">Tocá los litros de un día para cargar el N° de pedido (OP) que devolvió YPF. En naranja: día pedido sin OP cargada.</p>'+
-    '<div class="tablewrap"><table class="pgA"><thead><tr><th>Distrito</th><th>Estado</th><th>Existencia</th><th>Autonomía (días)</th>'+dias.map(function(f,i){return '<th>'+DIAS_SEM[i]+'<br><small>'+fFecha(f).slice(0,5)+'</small></th>';}).join('')+'<th>Total</th><th></th></tr></thead><tbody>'+filas+
-    '<tr class="tot"><td colspan="4"><b>Total por día</b></td>'+totDia.map(function(v){return '<td class="n"><b>'+(v?fmt(v):'')+'</b></td>';}).join('')+'<td class="n"><b>'+fmt(sum(totDia))+'</b></td><td></td></tr></tbody></table></div></div>'+
+    '<div class="tablewrap"><table class="pgA"><thead><tr><th>Distrito</th><th>Estado</th><th>Existencia</th><th>Autonomía (días)</th>'+dias.map(function(f,i){return '<th>'+DIAS_SEM[i]+'<br><small>'+fFecha(f).slice(0,5)+'</small></th>';}).join('')+'<th>Total</th></tr></thead><tbody>'+filas+
+    '<tr class="tot"><td colspan="4"><b>Total por día</b></td>'+totDia.map(function(v){return '<td class="n"><b>'+(v?fmt(v):'')+'</b></td>';}).join('')+'<td class="n"><b>'+fmt(sum(totDia))+'</b></td></tr></tbody></table></div></div>'+
     '<div class="card block"><h4>Pedidos cargados en YPF para esta semana</h4><div class="row-end" style="justify-content:flex-start"><button class="btn" type="button" id="opNew">Cargar pedido YPF</button></div>'+
     (ops.length?'<div class="tablewrap"><table><thead><tr><th>N° de pedido (OP)</th><th>Distrito (destinatario)</th><th>Producto</th><th>Cant. pedida</th><th>Fecha del pedido</th><th>Despacho preferente</th><th>Estado</th><th>Camión compartido</th><th></th></tr></thead><tbody>'+ops.sort(function(a,b){return a.fechaDespacho<b.fechaDespacho?-1:1;}).map(function(o){
       return '<tr><td><b>'+esc(o.nPedido)+'</b></td><td>'+esc(D(o.dist).n)+' <small class="hint">'+esc(o.destinatario||'')+'</small></td><td>'+esc(o.producto||'')+'</td><td class="n">'+fmt(o.cant)+'</td><td>'+fFecha(o.fechaPedido)+'</td><td>'+fFecha(o.fechaDespacho)+'</td><td>'+esc(o.estado||'')+'</td><td>'+esc(o.grupo||'—')+'</td><td><button class="ghost small" type="button" data-ope="'+esc(o.id)+'">Editar</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">Sin pedidos de YPF cargados para estas fechas.</p>')+'</div>'+
@@ -2358,7 +2360,8 @@ function modalOP(id,pre){
     var a=getOPs().filter(function(x){return x.id!==o.id;});a.push(o);saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
     var p=getPedidos(o.dist).filter(function(x){return x.tipo==='gasoil'&&x.dias&&x.dias.some(function(d){return d.fecha===de;});})[0];
     if(p&&p.estado==='enviado'){var dd=diasPedido(p.fecha),todos=p.dias.every(function(d){return !d.litros||a.some(function(z){return z.dist===o.dist&&z.fechaDespacho===d.fecha;});});if(todos){p.estado='cargado';upsertPedido(p);if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});}}
-    closeModal();sync(false);toast('Pedido YPF '+n+' guardado para '+D(o.dist).n+'.');render();});
+    var dsSel=diasPedido(pedSem),fuera=de<dsSel[0]||de>dsSel[6];if(fuera)pedSem=juevesDe(addDays(de,-11));
+    closeModal();sync(false);toast('Pedido YPF '+n+' guardado para '+D(o.dist).n+'.'+(fuera?' Despacho '+fFecha(de)+': te muestro la semana del jueves '+fFecha(pedSem)+'.':''));render();});
 }
 function pullPedidos(manual){
   if(DEMO||!cfg.syncUrl||!navigator.onLine)return Promise.resolve();
@@ -2635,7 +2638,7 @@ function updatePill(){var p=$('#syncPill');if(!p)return;var q=getQueue().length,
   else if(syncing)txt='Sincronizando…';else if(!navigator.onLine){cls+=' warn';txt='Sin conexión'+(q?' · '+q+' pendiente'+(q>1?'s':''):'');}
   else if(!cfg.syncUrl)txt=q?q+' sin enviar':'Sin servidor';else if(lastErr){cls+=' err';txt='Error de envío'+(q?' · '+q:'');}
   else if(q){cls+=' warn';txt=q+' pendiente'+(q>1?'s':'');}else{cls+=' ok';txt='Al día';}
-  p.className=cls;p.textContent=txt;p.title=lastErr||'';}
+  p.className=cls;p.textContent=txt;p.title=(lastErr||'')+(q?' · tocá para ver el detalle':'');p.style.cursor=q?'pointer':'';p.setAttribute('role',q?'button':'status');}
 function qs(o){return Object.keys(o).map(function(k){return k+'='+encodeURIComponent(o[k]);}).join('&');}
 function getJSON(o){return fetch(cfg.syncUrl+(cfg.syncUrl.indexOf('?')>=0?'&':'?')+qs(Object.assign({key:cfg.syncKey},o))).then(function(r){return r.json();}).then(function(res){if(!res||!res.ok)throw new Error(res&&res.error||'respuesta inválida');return res;});}
 function postJSON(body){return fetch(cfg.syncUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({key:cfg.syncKey},body))}).then(function(r){return r.json();}).then(function(res){if(!res||!res.ok)throw new Error(res&&res.error||'respuesta inválida');return res;});}
@@ -2669,11 +2672,12 @@ function sync(manual){
   if(!navigator.onLine){if(manual)toast('Sin conexión. Todo queda guardado y se envía al volver internet.');updatePill();return Promise.resolve();}
   syncing=true;updatePill();
   var chain=Promise.resolve();
-  getQueue().forEach(function(item){chain=chain.then(function(){return enviar(item).then(function(){queueDel(item.k,item.id);});});});
+  var fallas=[];
+  getQueue().forEach(function(item){chain=chain.then(function(){return enviar(item).then(function(){queueDel(item.k,item.id);}).catch(function(e){var m=String(e&&e.message||e);queueErr(item.k,item.id,m);fallas.push(nombreItem(item)+': '+m);});});});
   return chain.then(function(){return Promise.all([pullUsers(),pullConfig()]);}).then(function(){
     var ds=me()?(isC()?[me().dist[0]]:misDistritos()):(cfg.devDist?[cfg.devDist]:[]);
     return getJSON({accion:'estado',distritos:ds.join(',')}).then(function(st){Object.keys(st.ultimos||{}).forEach(function(d){var u=st.ultimos[d];if(u)sset('cpt.remote.'+d,{fecha:u.fecha,turno:+u.turno,total:+u.total});});});
-  }).then(function(){return me()?pullPedidos(false):null;}).then(function(){prune();lastErr=null;if(manual)toast('Sincronización completa.');})
+  }).then(function(){return me()?pullPedidos(false):null;}).then(function(){prune();if(fallas.length){lastErr=fallas.length+' envío(s) con error · '+fallas[0];if(manual)toast('No se pudo enviar: '+fallas[0]);}else{lastErr=null;if(manual)toast('Sincronización completa.');}})
   .catch(function(e){lastErr=e.message;if(manual)toast('No se pudo sincronizar: '+e.message);})
   .then(function(){syncing=false;updatePill();
     if(ses&&me()&&VIEW==='turno'&&!editing&&DR){var s=currentSlot(DR.dist);if(s&&skey(s)!==skey(DR.slot)){loadDraft(DR.dist,false);render();}else if(s&&s.inicio!==DR.slot.inicio){DR.slot.inicio=s.inicio;persist();render();}}
@@ -2699,6 +2703,24 @@ function prune(){var lim=addDays(todayISO(),-DIAS_LOCAL),a=getTurnos(),q=getQueu
 window.addEventListener('online',function(){sync(false);});
 window.addEventListener('offline',updatePill);
 setInterval(function(){if(getQueue().length)sync(false);},120000);
+
+/* ---------- detalle de lo que falta enviar ---------- */
+var TIPOS_Q={turno:'Turno',informe:'Informe',usuario:'Usuario',cf:'Control físico',pedido:'Pedido',op:'Pedido YPF (OP)',config:'Configuración'};
+function nombreItem(x){var t=TIPOS_Q[x.k]||x.k,d='';
+  if(x.k==='op'){var o=getOPs().filter(function(z){return z.id===x.id;})[0];if(o)d=o.nPedido+' · '+D(o.dist).n;}
+  else if(x.k==='pedido'){var pd=getPedidos().filter(function(z){return z.id===x.id;})[0];if(pd)d=(pd.tipo==='lub'?'lubricante':'programa semanal')+' · '+D(pd.dist).n+' · '+fFecha(pd.fecha);}
+  else if(x.k==='turno'){var r=getTurnos().filter(function(z){return z.id===x.id;})[0];if(r)d=D(r.dist).n+' · '+fFecha(r.fecha)+' · turno '+(r.turno+1);}
+  return t+(d?' ('+d+')':'');}
+function verPendientes(){var q=getQueue();if(!q.length)return;
+  openModal('<h3>Datos sin enviar al servidor</h3><p class="hint">Todo esto está guardado en este equipo. Se envía solo al sincronizar; si algo da error, el motivo aparece acá.</p>'+
+    '<div class="tablewrap"><table><thead><tr><th>Qué</th><th>Estado</th>'+(isA()?'<th></th>':'')+'</tr></thead><tbody>'+q.map(function(x,i){return '<tr><td>'+esc(nombreItem(x))+'</td><td>'+(x.err?'<span class="chip r">Error</span> '+esc(x.err)+(x.errTs?' <small class="hint">'+fFH(x.errTs)+'</small>':''):'<span class="chip">Pendiente</span>')+'</td>'+(isA()?'<td><button class="ghost small" type="button" data-qdel="'+i+'">Descartar</button></td>':'')+'</tr>';}).join('')+'</tbody></table></div>'+
+    '<div class="row-end"><button class="btn" data-close type="button">Cerrar</button><button class="btn primary" type="button" id="qRetry">Reintentar ahora</button></div>');
+  $('#qRetry').addEventListener('click',function(){closeModal();sync(true).then(function(){if(getQueue().length)verPendientes();});});
+  $$('[data-qdel]').forEach(function(b){b.addEventListener('click',function(){var x=getQueue()[+b.dataset.qdel];if(!x)return;
+    if(b.dataset.ok){queueDel(x.k,x.id);closeModal();updatePill();toast('Descartado del envío (sigue guardado solo en este equipo).');if(getQueue().length)verPendientes();}
+    else{b.dataset.ok='1';b.textContent='¿Seguro? Tocá de nuevo';}});});
+}
+document.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('#syncPill'))verPendientes();});
 
 /* =====================================================================
    ARRANQUE, eventos globales y datos de demostración
