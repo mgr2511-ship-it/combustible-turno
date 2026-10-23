@@ -2270,16 +2270,23 @@ function fechaHoraLocal(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+p
 function guardarPedidoOficina(p,of){var u=me(),ahora=new Date().toISOString(),rec=new Date(of.recibido).toISOString();
   p.oficina={origen:of.origen,nota:of.nota||'',recibido:of.recibido,respaldo:of.respaldo||null,por:{legajo:u.legajo,nombre:u.nombre},cuando:ahora};
   if(!p.solicitante)p.solicitante={legajo:'',nombre:'',cat:''};
-  if(p.estado==='borrador'||!p.estado)p.estado='enviado';
+  if(p.estado==='borrador'||!p.estado)p.estado='enviado';if(p.estado==='enviado'&&todoConOP(p))p.estado='cargado';
   p.enviado={cuando:rec,por:{legajo:u.legajo,nombre:u.nombre+' (oficina · '+of.origen+')'}};p.actualizado=ahora;
   upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});sync(false);toast('Programa de '+D(p.dist).n+' guardado por la oficina.');pedOfi=null;pedTmp=null;render();}
 function cumplimiento(p,hoy){if(!p||!p.estado||p.estado==='borrador'){return new Date(hoy||new Date())>new Date(((p&&p.fecha)||'')+'T23:59:59')?'no':'pend';}
   var t=p.enviado&&new Date(p.enviado.cuando)>new Date(p.fecha+'T23:59:59');if(p.oficina&&p.oficina.por&&!p.oficina.corregidoPorDistrito)return 'ofi';return t?'tarde':'ok';}
+/** todos los días con litros pedidos ya tienen su OP (no anulada) */
+function todoConOP(p){if(!p||!p.dias||p.tipo==='lub')return false;var ds=p.dias.filter(function(d){return d.litros;});if(!ds.length)return false;var ops=getOPs(p.dist);
+  return ds.every(function(d){return ops.some(function(o){return o.fechaDespacho===d.fecha&&o.estado!=='Anulado';});});}
+/** pasa a «Cargado en YPF» (o vuelve a enviado) según las OP, sin importar si se cargaron antes o después del programa */
+function revisarCargado(p){if(!p||p.tipo==='lub'||!p.estado||p.estado==='borrador')return false;var c=todoConOP(p),nuevo=c?'cargado':'enviado';if(p.estado===nuevo)return false;
+  p.estado=nuevo;p.actualizado=new Date().toISOString();upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});return true;}
 function estadoPedido(p){if(!p)return '<span class="chip r">No enviado</span>';var t=p.enviado?(new Date(p.enviado.cuando)>new Date(p.fecha+'T23:59:59')):false;
   var ofc=p.oficina&&p.oficina.por?' <span class="chip r" title="'+esc('Cargado por '+p.oficina.por.nombre+(p.oficina.nota?' · '+p.oficina.nota:''))+'">Cargado por la oficina · '+esc(p.oficina.origen)+(p.oficina.corregidoPorDistrito?' · luego corregido por el distrito':'')+'</span>':'';
   if(p.modOficina&&p.modOficina.length)ofc+=' <span class="chip y" title="'+esc(p.modOficina.map(function(m){return m.nombre+' '+fFH(m.cuando);}).join(' · '))+'">Corregido por la oficina</span>';
-  if(p.oficina&&p.oficina.por&&p.estado!=='borrador')return (p.estado==='cargado'?'<span class="chip b">Cargado en YPF</span>':'<span class="chip '+(t?'y':'g')+'">Recibido '+fFH(p.enviado.cuando)+(t?' · fuera de término':'')+'</span>')+ofc;
-  return (p.estado==='enviado'?'<span class="chip '+(t?'y':'g')+'">Enviado '+fFH(p.enviado.cuando)+(t?' · fuera de término':'')+'</span>':p.estado==='cargado'?'<span class="chip b">Cargado en YPF</span>':'<span class="chip">Borrador</span>')+ofc;}
+  if(p.estado==='borrador')return '<span class="chip">Borrador</span>'+ofc;
+  var lleg=(p.oficina&&p.oficina.por?'Recibido ':'Enviado ')+fFH(p.enviado.cuando)+(t?' · fuera de término':'');
+  return (p.estado==='cargado'?'<span class="chip b" title="'+esc(lleg)+'">Cargado en YPF</span>':'<span class="chip '+(t?'y':'g')+'">'+lleg+'</span>')+ofc;}
 function guardarPedido(p,enviar){var u=me();p.actualizado=new Date().toISOString();if(enviar){if(p.oficina&&!p.oficina.corregidoPorDistrito)p.oficina.corregidoPorDistrito={legajo:u.legajo,nombre:u.nombre,cuando:p.actualizado};if(p.oficina)p.solicitante={legajo:u.legajo,nombre:u.nombre,cat:u.cat};p.estado='enviado';p.enviado={cuando:new Date().toISOString(),por:{legajo:u.legajo,nombre:u.nombre}};}
   upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});sync(false);toast(enviar?'Pedido enviado a la oficina.':'Borrador guardado.');render();}
 function compartidoTxt(o){if(!o.grupo)return '—';var otros=getOPs().filter(function(x){return x.grupo===o.grupo&&x.id!==o.id;});return otros.length?otros.map(function(x){return D(x.dist).n+' ('+fmt(x.cant)+' L, OP '+x.nPedido+')';}).join(', '):o.grupo;}
@@ -2317,6 +2324,7 @@ function modalLub(id,dist){
 
 /* ---------- A: tablero de la semana y pedidos YPF ---------- */
 function pedidosA(box){
+  var cambio=false;getPedidos().forEach(function(q){if(q.tipo==='gasoil'&&revisarCargado(q))cambio=true;});if(cambio)sync(false);
   var jue=pedSem,dias=diasPedido(jue),ds=usinas(),tarde=new Date()>new Date(jue+'T23:59:59'),totDia=dias.map(function(){return 0;});
   var ops=getOPs().filter(function(o){return o.fechaDespacho>=dias[0]&&o.fechaDespacho<=dias[6];}),opDia={};ops.forEach(function(o){(opDia[o.dist+'#'+o.fechaDespacho]=opDia[o.dist+'#'+o.fechaDespacho]||[]).push(o);});
   var filas=ds.map(function(d){var p=getPedidos(d).filter(function(x){return x.id===idPG(d,jue);})[0],enviado=p&&p.estado!=='borrador';
@@ -2364,7 +2372,7 @@ function modalOP(id,pre){
     o.actualizado=new Date().toISOString();o.por={legajo:u.legajo,nombre:u.nombre};
     var a=getOPs().filter(function(x){return x.id!==o.id;});a.push(o);saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
     var p=getPedidos(o.dist).filter(function(x){return x.tipo==='gasoil'&&x.dias&&x.dias.some(function(d){return d.fecha===de;});})[0];
-    if(p&&p.estado==='enviado'){var dd=diasPedido(p.fecha),todos=p.dias.every(function(d){return !d.litros||a.some(function(z){return z.dist===o.dist&&z.fechaDespacho===d.fecha;});});if(todos){p.estado='cargado';upsertPedido(p);if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});}}
+    getPedidos(o.dist).forEach(function(q){if(q.tipo==='gasoil')revisarCargado(q);});
     var dsSel=diasPedido(pedSem),fuera=de<dsSel[0]||de>dsSel[6];if(fuera)pedSem=juevesDe(addDays(de,-11));
     closeModal();sync(false);toast('Pedido YPF '+n+' guardado para '+D(o.dist).n+'.'+(fuera?' Despacho '+fFecha(de)+': te muestro la semana del jueves '+fFecha(pedSem)+'.':''));render();});
 }

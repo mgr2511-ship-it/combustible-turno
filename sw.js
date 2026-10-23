@@ -1,5 +1,5 @@
 // Control de Usina: funcionamiento sin internet
-const CACHE = 'cdu-v6.9';
+const CACHE = 'cdu-v6.10';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon.png'];
 
 self.addEventListener('install', e => {
