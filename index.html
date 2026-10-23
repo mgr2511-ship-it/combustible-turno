@@ -18,7 +18,7 @@
 /* Layout: planilla centrada como el formulario en papel para operadores; panel ancho con pestañas para A y B. Marca SPSE: azul institucional */
 :root{
   --bg:#e7ebf1; --sheet:#fbfcfd; --ink:#15202d; --muted:#596678; --line:#c5cdd8; --rule:#22314a;
-  --brand:#1e3a66; --brand-ink:#ffffff; --brand-soft:#dfe7f3; --accent:#1e4f8c; --accent-ink:#ffffff;
+  --brand:#1c1a4e; --brand-ink:#ffffff; --brand-soft:#e4e3f1; --accent:#2a2878; --accent-ink:#ffffff; --gold:#c4942b; --title:#0e0d24;
   --danger:#b3261e; --danger-ink:#ffffff; --danger-bg:#fbe4e2;
   --ok:#1b6e3a; --ok-bg:#dff1e5; --warn:#8a5300; --warn-bg:#fdf0d5; --info:#1e4f8c; --info-bg:#e1ebf7;
   --field:#f1f4f8; --pad-bg:#ffffff; --pad-ink:#101820; --shadow:0 1px 2px rgba(20,30,50,.08),0 6px 20px rgba(20,30,50,.07);
@@ -27,14 +27,14 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0e141c; --sheet:#161f2b; --ink:#e2e8f0; --muted:#97a3b3; --line:#2e3a4a; --rule:#9fb0c6;
-  --brand:#1e3a66; --brand-ink:#ffffff; --brand-soft:#1a2b45; --accent:#7fa8e0; --accent-ink:#0b1626;
+  --brand:#1c1a4e; --brand-ink:#ffffff; --brand-soft:#24234a; --accent:#d9ab45; --accent-ink:#14122e; --gold:#d9ab45; --title:#f4f2ff;
   --danger:#ff7b72; --danger-ink:#2a0b09; --danger-bg:#3d1b1a;
   --ok:#7fd49b; --ok-bg:#163223; --warn:#f2bf5e; --warn-bg:#3a2c10; --info:#8fb5ea; --info-bg:#172a44;
   --field:#101822; --pad-bg:#ffffff; --pad-ink:#101820; --shadow:0 1px 2px rgba(0,0,0,.4);
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0e141c; --sheet:#161f2b; --ink:#e2e8f0; --muted:#97a3b3; --line:#2e3a4a; --rule:#9fb0c6;
-  --brand:#1e3a66; --brand-ink:#ffffff; --brand-soft:#1a2b45; --accent:#7fa8e0; --accent-ink:#0b1626;
+  --brand:#1c1a4e; --brand-ink:#ffffff; --brand-soft:#24234a; --accent:#d9ab45; --accent-ink:#14122e; --gold:#d9ab45; --title:#f4f2ff;
   --danger:#ff7b72; --danger-ink:#2a0b09; --danger-bg:#3d1b1a;
   --ok:#7fd49b; --ok-bg:#163223; --warn:#f2bf5e; --warn-bg:#3a2c10; --info:#8fb5ea; --info-bg:#172a44;
   --field:#101822; --pad-bg:#ffffff; --pad-ink:#101820; --shadow:0 1px 2px rgba(0,0,0,.4);
@@ -384,6 +384,17 @@ table.cumpl th.cw,table.cumpl td.cw{padding:4px 2px;text-align:center;min-width:
 .docopc{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin:0 0 8px;font-size:.9rem}.docopc label{display:flex;gap:6px;align-items:center}
 .chip.nn{background:transparent;color:var(--muted);border:1px dashed var(--line)}
 .cdot.no{background:var(--line);opacity:.8}
+
+/* ---- jerarquía visual (paleta SPSE: azul índigo + dorado) ---- */
+.topbar{border-bottom:3px solid var(--gold)}
+.navtab[aria-current="page"]{box-shadow:inset 0 -3px 0 var(--gold)}
+.block h4{color:var(--title);font:700 1.14rem var(--f-display);letter-spacing:.03em;border-left:4px solid var(--gold);padding:1px 0 1px 10px;margin:0 0 4px}
+.block h4 + .hint{margin-top:2px}
+.ptitle h1{color:var(--title)}
+.pgA td b{font-weight:600}
+.pgA td .acc .ghost{padding:2px 8px;font-size:.74rem;font-weight:500;color:var(--muted);border-color:var(--line)}
+.pgA td .acc .ghost:hover{color:var(--ink)}
+.block .row-end .btn.sec{padding:6px 12px;font-size:.88rem}
 </style>
 </head>
 <body>
@@ -2344,7 +2355,7 @@ function pedidosA(box){
     '<p class="hint">Tocá los litros de un día para cargar el N° de pedido (OP) que devolvió YPF. En naranja: día pedido sin OP cargada.</p>'+
     '<div class="tablewrap"><table class="pgA"><thead><tr><th>Distrito</th><th>Estado</th><th>Existencia</th><th>Autonomía (días)</th>'+dias.map(function(f,i){return '<th>'+DIAS_SEM[i]+'<br><small>'+fFecha(f).slice(0,5)+'</small></th>';}).join('')+'<th>Total</th></tr></thead><tbody>'+filas+
     '<tr class="tot"><td colspan="4"><b>Total por día</b></td>'+totDia.map(function(v){return '<td class="n"><b>'+(v?fmt(v):'')+'</b></td>';}).join('')+'<td class="n"><b>'+fmt(sum(totDia))+'</b></td></tr></tbody></table></div></div>'+
-    '<div class="card block"><h4>Pedidos cargados en YPF para esta semana</h4><div class="row-end" style="justify-content:flex-start"><button class="btn" type="button" id="opNew">Cargar pedido YPF</button></div>'+
+    '<div class="card block"><h4>Pedidos cargados en YPF para esta semana</h4><div class="row-end" style="justify-content:flex-start"><button class="btn sec" type="button" id="opNew">+ Cargar pedido YPF</button></div>'+
     (ops.length?'<div class="tablewrap"><table><thead><tr><th>N° de pedido (OP)</th><th>Distrito (destinatario)</th><th>Producto</th><th>Cant. pedida</th><th>Fecha del pedido</th><th>Despacho preferente</th><th>Estado</th><th>Camión compartido</th><th></th></tr></thead><tbody>'+ops.sort(function(a,b){return a.fechaDespacho<b.fechaDespacho?-1:1;}).map(function(o){
       return '<tr><td><b>'+esc(o.nPedido)+'</b></td><td>'+esc(D(o.dist).n)+' <small class="hint">'+esc(o.destinatario||'')+'</small></td><td>'+esc(o.producto||'')+'</td><td class="n">'+fmt(o.cant)+'</td><td>'+fFecha(o.fechaPedido)+'</td><td>'+fFecha(o.fechaDespacho)+'</td><td>'+esc(o.estado||'')+'</td><td>'+esc(o.grupo||'—')+'</td><td><button class="ghost small" type="button" data-ope="'+esc(o.id)+'">Editar</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">Sin pedidos de YPF cargados para estas fechas.</p>')+'</div>'+
     '<div class="card block"><h4>Pedidos de lubricante pendientes</h4>'+(lubs.length?'<div class="tablewrap"><table><thead><tr><th>Distrito</th><th>Fecha</th><th>Aceites</th><th>Estado</th><th>N° de pedido YPF</th><th></th></tr></thead><tbody>'+lubs.map(function(p){return '<tr><td>'+esc(D(p.dist).n)+'</td><td>'+fFecha(p.fecha)+'</td><td>'+ACEITES.filter(function(a){return p.tambores&&p.tambores[a.k];}).map(function(a){return esc(a.n)+': '+p.tambores[a.k];}).join('<br>')+'</td><td>'+estadoLub(p)+'</td><td>'+esc(p.nPedido||'—')+'</td><td><button class="ghost small" type="button" data-lub="'+esc(p.id)+'">Abrir</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">No hay pedidos de lubricante pendientes.</p>')+'</div>'+cumplimientoHTML(jue,ds);
