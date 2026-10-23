@@ -380,6 +380,10 @@ table.cumpl th.cw,table.cumpl td.cw{padding:4px 2px;text-align:center;min-width:
 .cdot.ok{background:var(--ok)}.cdot.tarde{background:var(--warn)}.cdot.ofi{background:var(--danger);opacity:.65}.cdot.no{background:var(--danger)}
 .cdot.ofi{box-shadow:inset 0 0 0 3px var(--sheet)}
 .pgA td .acc{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}.pgA td .acc .ghost{padding:3px 8px;font-size:.78rem}
+
+.docopc{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin:0 0 8px;font-size:.9rem}.docopc label{display:flex;gap:6px;align-items:center}
+.chip.nn{background:transparent;color:var(--muted);border:1px dashed var(--line)}
+.cdot.no{background:var(--line);opacity:.8}
 </style>
 </head>
 <body>
@@ -1990,13 +1994,13 @@ function excelCF(dist,mes,anual){
 
 /* ---------- Pedido semanal de gasoil ---------- */
 var DIAS_SEM=['Martes','Miércoles','Jueves','Viernes','Sábado','Domingo','Lunes'];
-function excelPedidoGasoil(p){
+function excelPedidoGasoil(p,o){o=o||{};
   return Libro.abrir('ps').then(function(lb){return lb.hoja('Hoja1').then(function(h){
     h.set('B6',D(p.dist).n.toUpperCase()).set('G6',p.capacidad).setF('D8',null,r2(p.capacidad-p.existencia)).set('G8',xserial(p.fecha));
     h.set('B10',p.existencia).setF('D10',null,p.consumoDiario?r2(p.existencia/p.consumoDiario):0).set('G10',p.consumoDiario);
     p.dias.forEach(function(x,i){var c=colTxt(2+i);h.set(c+'12',DIAS_SEM[i]).set(c+'13',xserial(x.fecha)).set(c+'14',x.litros||null);});
     for(var i=0;i<4;i++)h.set('A'+(17+i),(p.obs||[])[i]||null);
-    h.set('F29',p.solicitante?p.solicitante.nombre:null);
+    h.set('F29',o.nombre!==false&&p.solicitante&&p.solicitante.nombre?p.solicitante.nombre:null);
     return lb.generar();});}).then(function(b){bajarBlob('Pedido semanal de gasoil - '+D(p.dist).n+' - '+fFecha(p.fecha).replace(/\//g,'-')+'.xlsx',b);});
 }
 /* ---------- Pedido de lubricante (original y copia) ---------- */
@@ -2120,7 +2124,7 @@ function pdfPedidoGasoil(p,o){
     '<tr><td>Litros</td>'+p.dias.map(function(x){return '<td>'+fmt(x.litros)+'</td>';}).join('')+'</tr><tr><td></td>'+p.dias.map(function(){return '<td></td>';}).join('')+'</tr></table>'+
     '<table class="o">'+[0,1,2,3].map(function(i){return '<tr><td>'+esc((p.obs||[])[i]||'')+'</td></tr>';}).join('')+'</table>'+
     '<div class="txt"><b>Enviar a los siguientes mails : produccionspse@gmail.com , diaz2836@spse.com.ar</b><br><br>La programación semanal debe ser enviada posteriormente a la medición de existencia de gas-oíl de las 12:00 hs. los días Jueves, aquel distrito que no lo<br>envié en termino quedará fuera del programa de despachos por el lapso de una semana. Es responsabilidad exclusiva del distrito.</div>'+
-    '<div class="fir"><div><div class="sig">'+(o.firmas?firmaImg(p.firma):'')+'</div><div style="font-weight:400;font-size:10pt">'+esc(p.solicitante?p.solicitante.nombre:'')+'</div><div class="ln">Firma y Aclaración // Agente solicitante</div></div></div>';
+    '<div class="fir"><div><div class="sig">'+(o.firmas?firmaImg(p.firma):'')+'</div><div style="font-weight:400;font-size:10pt;min-height:4.5mm">'+esc(o.nombre!==false&&p.solicitante?p.solicitante.nombre||'':'')+'</div><div class="ln">Firma y Aclaración // Agente solicitante</div></div></div>';
   return docBase('Pedido semanal '+D(p.dist).n+' '+fFecha(p.fecha),PAG.a4h,css,body);
 }
 
@@ -2223,6 +2227,8 @@ function pedidosB(box,distArg,ofi){
   var ofiHTML=deDist?'<div class="card block ofi"><h4>Corrección por la oficina</h4><p class="banner warn">Este programa lo envió el distrito ('+esc(guardado.enviado?guardado.enviado.por.nombre+' · '+fFH(guardado.enviado.cuando):'')+'). Si lo cambiás, queda registrado que lo modificó la oficina, a tu nombre.</p></div>':ofi?'<div class="card block ofi"><h4>Carga por la oficina</h4><p class="hint">Usalo cuando el distrito no envió el programa desde la app (por ejemplo, lo mandó por WhatsApp). Queda registrado que lo cargó la oficina, a tu nombre. El gerente lo ve y puede corregirlo mientras no haya OP cargadas.</p>'+
       '<div class="form-grid"><div class="field"><label for="ofO">Cómo llegó el pedido</label><select id="ofO">'+ORIGENES.map(function(o){return '<option'+(of.origen===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select></div>'+
       '<div class="field"><label for="ofR">Fecha y hora en que lo mandó el distrito</label><input id="ofR" type="datetime-local" value="'+esc(of.recibido||'')+'"></div>'+
+      '<div class="field"><label for="ofS">Agente solicitante (categoría B)</label><select id="ofS">'+(function(){var gs=gerentesDe(dist),cur=p.solicitante&&p.solicitante.legajo&&catL(p.solicitante)==='B'?String(p.solicitante.legajo):(of.solic!=null?of.solic:(gs[0]?String(gs[0].legajo):''));
+        return gs.map(function(u){return '<option value="'+esc(u.legajo)+'"'+(String(u.legajo)===cur?' selected':'')+'>'+esc(u.nombre)+' · '+esc(u.legajo)+'</option>';}).join('')+'<option value=""'+(cur===''?' selected':'')+'>(dejar en blanco)</option>';})()+'</select><small class="hint">Es el nombre que va en «Firma y Aclaración» del PDF.</small></div>'+
       '<div class="field full"><label for="ofN">Nota (quién lo mandó, aclaraciones)</label><input id="ofN" value="'+esc(of.nota||'')+'"></div>'+
       '<div class="field full"><label>Respaldo (captura del WhatsApp o mail) · opcional</label><div class="row-end" style="justify-content:flex-start"><button class="ghost" type="button" id="ofF">'+(of.respaldo?'Cambiar captura':'Adjuntar captura')+'</button>'+(of.respaldo?'<span class="chip g">Captura adjunta</span>'+(of.respaldo.url?' <a href="'+esc(of.respaldo.url)+'" target="_blank" rel="noopener">ver en Drive</a>':' <span class="hint">se sube al sincronizar</span>')+' <button class="ghost small" type="button" id="ofFx">Quitar</button>':'')+'</div></div></div></div>':'';
   box.innerHTML=(ofi?'<div class="row-end" style="justify-content:flex-start"><button class="ghost" type="button" id="ofVolver">← Volver a todos los distritos</button></div>':'')+ofiHTML+'<div class="card block"><h4>Pedido de gas oil · programa semanal · '+esc(D(dist).n)+'</h4>'+
@@ -2240,17 +2246,17 @@ function pedidosB(box,distArg,ofi){
     '<h4>Proyección de existencia</h4><div class="tablewrap"><table><thead><tr><th>Día</th><th>Consumo estimado</th><th>Camión</th><th>Existencia al final del día</th><th>Autonomía</th></tr></thead><tbody>'+pr.map(function(x){
       return '<tr class="'+(x.bajo||x.st<0?'row-bad':'')+'"><td>'+(x.lbl||(DIAS_SEM[(diaSemana(x.f)+5)%7]+' '+fFecha(x.f)))+(x.prev&&!x.lbl?' <small class="hint">(semana anterior)</small>':'')+'</td><td class="n">'+fmt(x.c)+'</td><td class="n">'+(x.cam?fmt(x.cam):'—')+'</td><td class="n '+(x.st<0?'cbad':'')+'">'+fmt(x.st)+(x.lleno?' <span class="chip r">no entra</span>':'')+'</td><td class="n">'+(x.aut!=null?fmt(Math.round(x.aut*10)/10)+' días':'')+'</td></tr>';}).join('')+'</tbody></table></div>'+
     '<div class="form-grid">'+[0,1,2,3].map(function(i){return '<div class="field full"><label for="pgO'+i+'">Observación '+(i+1)+'</label><input id="pgO'+i+'" value="'+esc(p.obs[i]||'')+'"></div>';}).join('')+'</div>'+
-    '<div class="fslot" style="max-width:420px"><b>Firma y aclaración · '+(ofi?'agente de la oficina que lo carga (opcional)':'agente solicitante')+'</b><canvas id="pgPad" class="pad small"></canvas><div class="pad-tools"><span>'+esc(ofi?me().nombre:(p.solicitante?p.solicitante.nombre:''))+'</span><button class="ghost small" type="button" id="pgClr">Borrar</button></div></div>'+
+    (ofi?'':'<div class="fslot" style="max-width:420px"><b>Firma y aclaración · agente solicitante</b><canvas id="pgPad" class="pad small"></canvas><div class="pad-tools"><span>'+esc(p.solicitante?p.solicitante.nombre:'')+'</span><button class="ghost small" type="button" id="pgClr">Borrar</button></div></div>')+
     '<p class="hint" id="pgMsg"></p><div class="row-end"><button class="ghost" type="button" id="pgPdf">Descargar PDF para firmar (A4)</button><button class="ghost" type="button" id="pgXls">Excel</button>'+(bloq?'':ofi?'<button class="btn primary" type="button" id="pgSend">Guardar programa del distrito</button>':'<button class="btn" type="button" id="pgSave">Guardar borrador</button><button class="btn primary" type="button" id="pgSend">'+(p.estado==='enviado'?'Reenviar a la oficina':'Enviar a la oficina')+'</button>')+'</div></div>'+
     '<div class="card block"><h4>Camiones pedidos a YPF para '+esc(D(dist).n)+'</h4>'+(ops.length?'<div class="tablewrap"><table><thead><tr><th>N° de pedido (OP)</th><th>Despacho</th><th>Litros</th><th>Estado en YPF</th><th>Camión compartido con</th><th>Recibido</th></tr></thead><tbody>'+ops.map(function(o){var r=rec[o.nPedido];
       return '<tr><td><b>'+esc(o.nPedido)+'</b></td><td>'+fFecha(o.fechaDespacho)+'</td><td class="n">'+fmt(o.cant)+'</td><td>'+esc(o.estado||'')+'</td><td>'+esc(compartidoTxt(o))+'</td><td>'+(r?'<span class="chip g">'+esc(r.remito)+' · '+fFecha(r.fecha)+'</span>':'<span class="hint">—</span>')+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">La oficina todavía no cargó pedidos de YPF para estas fechas.</p>')+'</div>'+
     (ofi?'':lubListaHTML(dist));
-  var pad=makePad($('#pgPad'),function(){return p.firma;},function(v){p.firma=v;});$('#pgClr').addEventListener('click',pad.clear);
+  if($('#pgPad')){var pad=makePad($('#pgPad'),function(){return p.firma;},function(v){p.firma=v;});$('#pgClr').addEventListener('click',pad.clear);}
   function upd(){var t=sum(p.dias.map(function(x){return x.litros;}));$('#pgTot').textContent=fmt(t);$('#pgDisp').textContent=fmt(r2(p.capacidad-(p.existencia||0)))+' L';$('#pgAut').textContent=p.consumoDiario?fmt(Math.round(p.existencia/p.consumoDiario*10)/10)+' días':'—';}
   box.addEventListener('input',function(e){var el=e.target,m;if(el.id==='pgEx')p.existencia=parseAR(el.value);else if(el.id==='pgCd')p.consumoDiario=parseAR(el.value);else if((m=el.id.match(/^pgO(\d)$/)))p.obs[+m[1]]=el.value;else if(el.dataset.pgd!=null)p.dias[+el.dataset.pgd].litros=parseAR(el.value);else return;upd();});
   box.addEventListener('change',function(e){var el=e.target;if(el.dataset.pgd!=null||el.id==='pgEx'||el.id==='pgCd'){el.value=fmt(parseAR(el.value));render();}});
   $('#pgSug').addEventListener('click',function(){sugerir(p,prev);render();toast('Programa sugerido. Revisalo antes de enviar.');});
-  $('#pgPdf').addEventListener('click',function(){prepFirmas(p).then(function(q){verDoc('Pedido semanal de gas oil',pdfPedidoGasoil(q,{firmas:true}),'Pedido semanal '+D(dist).n+' '+fFecha(jue));});});
+  $('#pgPdf').addEventListener('click',function(){verPedidoGasoil(p);});
   $('#pgXls').addEventListener('click',function(){excelPedidoGasoil(p).catch(function(e){toast(e.message);});});
   if(bloq){box.querySelectorAll('.card input, .card select').forEach(function(el){if(!el.closest('.ofi'))el.disabled=true;});$('#pgSug').disabled=true;}
   if($('#pgSave'))$('#pgSave').addEventListener('click',function(){guardarPedido(p,false);});
@@ -2259,7 +2265,7 @@ function pedidosB(box,distArg,ofi){
     if(ofi){if(!$('#ofR').value){m.textContent='Falta la fecha y hora en que lo mandó el distrito.';return;}guardarPedidoOficina(p,of);}else guardarPedido(p,true);});
   if(ofi){$('#ofVolver').addEventListener('click',function(){pedOfi=null;pedTmp=null;render();});}
   if(ofi&&!deDist){
-    var leer=function(){of.origen=$('#ofO').value;of.recibido=$('#ofR').value;of.nota=$('#ofN').value;};['ofO','ofR','ofN'].forEach(function(k){$('#'+k).addEventListener('change',leer);$('#'+k).addEventListener('input',leer);});
+    var leer=function(){of.origen=$('#ofO').value;of.recibido=$('#ofR').value;of.nota=$('#ofN').value;of.solic=$('#ofS').value;};['ofO','ofR','ofN','ofS'].forEach(function(k){$('#'+k).addEventListener('change',leer);$('#'+k).addEventListener('input',leer);});
     $('#ofF').addEventListener('click',function(){var fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.addEventListener('change',function(){var f=fi.files[0];if(!f)return;leer();
       achicar(f).then(function(data){var id=uid('F');return fotoPut(id,data).then(function(){of.respaldo={id:id};p.oficina=of;render();toast('Captura adjunta. Se guarda al tocar «Guardar programa del distrito».');});}).catch(function(e){toast('No se pudo leer la imagen: '+e.message);});});fi.click();});
     if($('#ofFx'))$('#ofFx').addEventListener('click',function(){leer();if(of.respaldo&&of.respaldo.id&&!of.respaldo.url)fotoDel(of.respaldo.id);delete of.respaldo;p.oficina=of;render();});}
@@ -2268,8 +2274,9 @@ function pedidosB(box,distArg,ofi){
 function fechaHoraLocal(d){return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+'T'+pad2(d.getHours())+':'+pad2(d.getMinutes());}
 /** la oficina (A) registra el programa que el distrito mandó por fuera de la app */
 function guardarPedidoOficina(p,of){var u=me(),ahora=new Date().toISOString(),rec=new Date(of.recibido).toISOString();
-  p.oficina={origen:of.origen,nota:of.nota||'',recibido:of.recibido,respaldo:of.respaldo||null,por:{legajo:u.legajo,nombre:u.nombre},cuando:ahora};
-  if(!p.solicitante)p.solicitante={legajo:'',nombre:'',cat:''};
+  p.oficina={origen:of.origen,nota:of.nota||'',recibido:of.recibido,solic:of.solic,respaldo:of.respaldo||null,por:{legajo:u.legajo,nombre:u.nombre},cuando:ahora};
+  var sl=of.solic!=null?of.solic:($('#ofS')?$('#ofS').value:''),gu=getUsers().filter(function(x){return String(x.legajo)===String(sl);})[0];
+  p.solicitante=gu?{legajo:gu.legajo,nombre:gu.nombre,cat:gu.cat}:{legajo:'',nombre:'',cat:''};p.firma=null;
   if(p.estado==='borrador'||!p.estado)p.estado='enviado';if(p.estado==='enviado'&&todoConOP(p))p.estado='cargado';
   p.enviado={cuando:rec,por:{legajo:u.legajo,nombre:u.nombre+' (oficina · '+of.origen+')'}};p.actualizado=ahora;
   upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});sync(false);toast('Programa de '+D(p.dist).n+' guardado por la oficina.');pedOfi=null;pedTmp=null;render();}
@@ -2281,7 +2288,7 @@ function todoConOP(p){if(!p||!p.dias||p.tipo==='lub')return false;var ds=p.dias.
 /** pasa a «Cargado en YPF» (o vuelve a enviado) según las OP, sin importar si se cargaron antes o después del programa */
 function revisarCargado(p){if(!p||p.tipo==='lub'||!p.estado||p.estado==='borrador')return false;var c=todoConOP(p),nuevo=c?'cargado':'enviado';if(p.estado===nuevo)return false;
   p.estado=nuevo;p.actualizado=new Date().toISOString();upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});return true;}
-function estadoPedido(p){if(!p)return '<span class="chip r">No enviado</span>';var t=p.enviado?(new Date(p.enviado.cuando)>new Date(p.fecha+'T23:59:59')):false;
+function estadoPedido(p){if(!p)return '<span class="chip nn">No enviado / no necesitó</span>';var t=p.enviado?(new Date(p.enviado.cuando)>new Date(p.fecha+'T23:59:59')):false;
   var ofc=p.oficina&&p.oficina.por?' <span class="chip r" title="'+esc('Cargado por '+p.oficina.por.nombre+(p.oficina.nota?' · '+p.oficina.nota:''))+'">Cargado por la oficina · '+esc(p.oficina.origen)+(p.oficina.corregidoPorDistrito?' · luego corregido por el distrito':'')+'</span>':'';
   if(p.modOficina&&p.modOficina.length)ofc+=' <span class="chip y" title="'+esc(p.modOficina.map(function(m){return m.nombre+' '+fFH(m.cuando);}).join(' · '))+'">Corregido por la oficina</span>';
   if(p.estado==='borrador')return '<span class="chip">Borrador</span>'+ofc;
@@ -2328,7 +2335,7 @@ function pedidosA(box){
   var jue=pedSem,dias=diasPedido(jue),ds=usinas(),tarde=new Date()>new Date(jue+'T23:59:59'),totDia=dias.map(function(){return 0;});
   var ops=getOPs().filter(function(o){return o.fechaDespacho>=dias[0]&&o.fechaDespacho<=dias[6];}),opDia={};ops.forEach(function(o){(opDia[o.dist+'#'+o.fechaDespacho]=opDia[o.dist+'#'+o.fechaDespacho]||[]).push(o);});
   var filas=ds.map(function(d){var p=getPedidos(d).filter(function(x){return x.id===idPG(d,jue);})[0],enviado=p&&p.estado!=='borrador';
-    return '<tr><td><b>'+esc(D(d).n)+'</b><div class="acc">'+(enviado?'<button class="ghost small" type="button" data-ver="'+esc(p.id)+'">Ver</button>':'')+'<button class="ghost small" type="button" data-ofi="'+d+'">'+(enviado?'Editar':'Cargar por la oficina')+'</button></div></td><td>'+(enviado?estadoPedido(p):(tarde?'<span class="chip r">No enviado</span>':'<span class="chip">Pendiente</span>'))+'</td><td class="n">'+(enviado?fmt(p.existencia):'')+'</td><td class="n">'+(enviado&&p.consumoDiario?fmt(Math.round(p.existencia/p.consumoDiario*10)/10):'')+'</td>'+
+    return '<tr><td><b>'+esc(D(d).n)+'</b><div class="acc">'+(enviado?'<button class="ghost small" type="button" data-ver="'+esc(p.id)+'">Ver</button>':'')+'<button class="ghost small" type="button" data-ofi="'+d+'">'+(enviado?'Editar':'Cargar por la oficina')+'</button></div></td><td>'+(enviado?estadoPedido(p):(tarde?'<span class="chip nn" title="No envió programa esta semana: puede ser que no lo necesitara por tener stock suficiente">No enviado / no necesitó</span>':'<span class="chip">Pendiente</span>'))+'</td><td class="n">'+(enviado?fmt(p.existencia):'')+'</td><td class="n">'+(enviado&&p.consumoDiario?fmt(Math.round(p.existencia/p.consumoDiario*10)/10):'')+'</td>'+
       dias.map(function(f,i){var l=enviado?p.dias[i].litros:null,os=opDia[d+'#'+f]||[];if(l)totDia[i]+=l;
         return '<td class="n pgcell'+(l&&!os.length?' falta':'')+'"><button type="button" class="linkbtn" data-opn="'+d+'|'+f+'|'+(l||'')+'">'+(l?fmt(l):'+')+'</button>'+os.map(function(o){return '<div class="opchip" data-ope="'+esc(o.id)+'">OP '+esc(o.nPedido)+(o.grupo?' · '+esc(o.grupo):'')+'</div>';}).join('')+'</td>';}).join('')+
       '<td class="n"><b>'+(enviado?fmt(sum(p.dias.map(function(x){return x.litros;}))):'')+'</b></td></tr>';}).join('');
@@ -2345,9 +2352,7 @@ function pedidosA(box){
   box.addEventListener('click',function(e){var b=e.target.closest('[data-opn],[data-ope],[data-ver],[data-lub],[data-ofi]');if(!b)return;
     if(b.dataset.ofi){pedOfi=b.dataset.ofi;pedTmp=null;render();window.scrollTo(0,0);return;}
     if(b.dataset.ope)modalOP(b.dataset.ope,{});else if(b.dataset.opn){var s=b.dataset.opn.split('|');modalOP(null,{dist:s[0],fechaDespacho:s[1],cant:s[2]?+s[2]:null});}
-    else if(b.dataset.ver){var p=getPedidos().filter(function(x){return x.id===b.dataset.ver;})[0];prepFirmas(p).then(function(q){verDoc('Pedido semanal · '+D(p.dist).n,pdfPedidoGasoil(q,{firmas:true}),'Pedido semanal '+D(p.dist).n+' '+fFecha(p.fecha));
-      ponerExcel();});
-      var ponerExcel=function(){var r=$('#modalCard .row-end');if(r){var x=document.createElement('button');x.className='ghost';x.type='button';x.textContent='Excel';x.addEventListener('click',function(){excelPedidoGasoil(p);});r.insertBefore(x,r.firstChild);}};}
+    else if(b.dataset.ver){var p=getPedidos().filter(function(x){return x.id===b.dataset.ver;})[0];if(p)verPedidoGasoil(p);}
     else if(b.dataset.lub)modalLub(b.dataset.lub,null);});
 }
 var ESTADOS_YPF=['En tratamiento','En tratamiento: Listo para despacho','Despachado','Entregado','Anulado'];
@@ -2389,13 +2394,30 @@ function pullPedidos(manual){
 function cumplimientoHTML(jue,ds){
   var gas=getPedidos().filter(function(x){return x.tipo==='gasoil'&&x.estado!=='borrador';});if(!gas.length)return '';
   var ini=gas.map(function(x){return x.fecha;}).sort()[0],sem=[];for(var j=jue,k=0;k<12&&j>=ini;k++,j=addDays(j,-7))sem.unshift(j);
-  var L={ok:['g','A tiempo'],tarde:['y','Fuera de término'],ofi:['r','Cargado por la oficina'],no:['r','No enviado'],pend:['','Pendiente']};
+  var L={ok:['g','A tiempo'],tarde:['y','Fuera de término'],ofi:['r','Cargado por la oficina'],no:['','Sin pedido (no necesitó)'],pend:['','Pendiente']};
   var filas=ds.map(function(d){var c={ok:0,tarde:0,ofi:0,no:0,pend:0},celdas=sem.map(function(j){var p=getPedidos(d).filter(function(x){return x.id===idPG(d,j);})[0],e=cumplimiento(p||{fecha:j});c[e]++;
       return '<td class="cw"><span class="cdot '+e+'" title="'+esc(fFecha(j)+': '+L[e][1]+(p&&p.oficina?' ('+p.oficina.origen+')':''))+'"></span></td>';}).join('');
-    var tot=c.ok+c.tarde+c.ofi+c.no;
+    var tot=c.ok+c.tarde+c.ofi;
     return '<tr><td><b>'+esc(D(d).n)+'</b></td>'+celdas+'<td class="n">'+c.ok+'</td><td class="n">'+c.tarde+'</td><td class="n">'+c.ofi+'</td><td class="n">'+c.no+'</td><td class="n"><b>'+(tot?Math.round(c.ok/tot*100)+' %':'—')+'</b></td></tr>';}).join('');
-  return '<div class="card block"><h4>Cumplimiento del programa semanal</h4><p class="hint">Últimas '+sem.length+' semanas, desde que se usa la app. Cada punto es un jueves: verde, enviado a tiempo desde la app; amarillo, fuera de término; rojo, no lo envió o lo cargó la oficina porque llegó por fuera de la app.</p>'+
-    '<div class="tablewrap"><table class="cumpl"><thead><tr><th>Distrito</th>'+sem.map(function(j){return '<th class="cw"><small>'+fFecha(j).slice(0,5)+'</small></th>';}).join('')+'<th>A tiempo</th><th>Tarde</th><th>Oficina</th><th>No enviado</th><th>Cumplimiento</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+  return '<div class="card block"><h4>Cumplimiento del programa semanal</h4><p class="hint">Últimas '+sem.length+' semanas, desde que se usa la app. Cada punto es un jueves: verde, enviado a tiempo desde la app; amarillo, fuera de término; rojo, lo cargó la oficina porque llegó por fuera de la app; gris, no hubo pedido esa semana (no necesitó). El cumplimiento se calcula solo sobre las semanas con pedido.</p>'+
+    '<div class="tablewrap"><table class="cumpl"><thead><tr><th>Distrito</th>'+sem.map(function(j){return '<th class="cw"><small>'+fFecha(j).slice(0,5)+'</small></th>';}).join('')+'<th>A tiempo</th><th>Tarde</th><th>Oficina</th><th>Sin pedido</th><th>Cumplimiento</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
+}
+
+/* ---------- agentes B del distrito y vista del PDF para firmar ---------- */
+function gerentesDe(dist){return getUsers().filter(function(u){return catL(u)==='B'&&u.activo!==false&&(u.dist||[]).map(String).indexOf(String(dist))>=0;});}
+function verPedidoGasoil(p){
+  var o={nombre:!!(p.solicitante&&p.solicitante.nombre),firmas:!!p.firma};
+  prepFirmas(p).then(function(q){
+    verDoc('Pedido semanal · '+D(p.dist).n,pdfPedidoGasoil(q,o),'Pedido semanal '+D(p.dist).n+' '+fFecha(p.fecha));
+    var prev=$('#modalCard .prev');if(!prev)return;
+    var bar=document.createElement('div');bar.className='docopc';
+    bar.innerHTML='<label><input type="checkbox" id="pgoN"'+(o.nombre?' checked':'')+(p.solicitante&&p.solicitante.nombre?'':' disabled')+'> Aclaración con el nombre'+(p.solicitante&&p.solicitante.nombre?' ('+esc(p.solicitante.nombre)+')':' (sin agente solicitante cargado)')+'</label>'+
+      '<label><input type="checkbox" id="pgoF"'+(o.firmas?' checked':'')+(p.firma?'':' disabled')+'> Firma digital'+(p.firma?'':' (no hay firma dibujada)')+'</label><span class="hint">Destildá las dos para imprimir en blanco y firmar a mano.</span>';
+    prev.parentNode.insertBefore(bar,prev);
+    var upd=function(){o.nombre=$('#pgoN').checked;o.firmas=$('#pgoF').checked;$('#docPrev').srcdoc=pdfPedidoGasoil(q,o);};
+    $('#pgoN').addEventListener('change',upd);$('#pgoF').addEventListener('change',upd);
+    var r=$('#modalCard .row-end');if(r){var x=document.createElement('button');x.className='ghost';x.type='button';x.textContent='Excel';x.addEventListener('click',function(){excelPedidoGasoil(p,{nombre:o.nombre}).catch(function(e){toast(e.message);});});r.insertBefore(x,r.firstChild);}
+  });
 }
 
 /* =====================================================================
