@@ -2288,7 +2288,7 @@ function todoConOP(p){if(!p||!p.dias||p.tipo==='lub')return false;var ds=p.dias.
 /** pasa a «Cargado en YPF» (o vuelve a enviado) según las OP, sin importar si se cargaron antes o después del programa */
 function revisarCargado(p){if(!p||p.tipo==='lub'||!p.estado||p.estado==='borrador')return false;var c=todoConOP(p),nuevo=c?'cargado':'enviado';if(p.estado===nuevo)return false;
   p.estado=nuevo;p.actualizado=new Date().toISOString();upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});return true;}
-function estadoPedido(p){if(!p)return '<span class="chip nn">No enviado / no necesitó</span>';var t=p.enviado?(new Date(p.enviado.cuando)>new Date(p.fecha+'T23:59:59')):false;
+function estadoPedido(p){if(!p)return '<span class="chip nn">Sin pedido</span>';var t=p.enviado?(new Date(p.enviado.cuando)>new Date(p.fecha+'T23:59:59')):false;
   var ofc=p.oficina&&p.oficina.por?' <span class="chip r" title="'+esc('Cargado por '+p.oficina.por.nombre+(p.oficina.nota?' · '+p.oficina.nota:''))+'">Cargado por la oficina · '+esc(p.oficina.origen)+(p.oficina.corregidoPorDistrito?' · luego corregido por el distrito':'')+'</span>':'';
   if(p.modOficina&&p.modOficina.length)ofc+=' <span class="chip y" title="'+esc(p.modOficina.map(function(m){return m.nombre+' '+fFH(m.cuando);}).join(' · '))+'">Corregido por la oficina</span>';
   if(p.estado==='borrador')return '<span class="chip">Borrador</span>'+ofc;
@@ -2335,7 +2335,7 @@ function pedidosA(box){
   var jue=pedSem,dias=diasPedido(jue),ds=usinas(),tarde=new Date()>new Date(jue+'T23:59:59'),totDia=dias.map(function(){return 0;});
   var ops=getOPs().filter(function(o){return o.fechaDespacho>=dias[0]&&o.fechaDespacho<=dias[6];}),opDia={};ops.forEach(function(o){(opDia[o.dist+'#'+o.fechaDespacho]=opDia[o.dist+'#'+o.fechaDespacho]||[]).push(o);});
   var filas=ds.map(function(d){var p=getPedidos(d).filter(function(x){return x.id===idPG(d,jue);})[0],enviado=p&&p.estado!=='borrador';
-    return '<tr><td><b>'+esc(D(d).n)+'</b><div class="acc">'+(enviado?'<button class="ghost small" type="button" data-ver="'+esc(p.id)+'">Ver</button>':'')+'<button class="ghost small" type="button" data-ofi="'+d+'">'+(enviado?'Editar':'Cargar por la oficina')+'</button></div></td><td>'+(enviado?estadoPedido(p):(tarde?'<span class="chip nn" title="No envió programa esta semana: puede ser que no lo necesitara por tener stock suficiente">No enviado / no necesitó</span>':'<span class="chip">Pendiente</span>'))+'</td><td class="n">'+(enviado?fmt(p.existencia):'')+'</td><td class="n">'+(enviado&&p.consumoDiario?fmt(Math.round(p.existencia/p.consumoDiario*10)/10):'')+'</td>'+
+    return '<tr><td><b>'+esc(D(d).n)+'</b><div class="acc">'+(enviado?'<button class="ghost small" type="button" data-ver="'+esc(p.id)+'">Ver</button>':'')+'<button class="ghost small" type="button" data-ofi="'+d+'">'+(enviado?'Editar':'Cargar por la oficina')+'</button></div></td><td>'+(enviado?estadoPedido(p):(tarde?'<span class="chip nn" title="No envió programa esta semana (por ejemplo, por tener stock suficiente)">Sin pedido</span>':'<span class="chip">Pendiente</span>'))+'</td><td class="n">'+(enviado?fmt(p.existencia):'')+'</td><td class="n">'+(enviado&&p.consumoDiario?fmt(Math.round(p.existencia/p.consumoDiario*10)/10):'')+'</td>'+
       dias.map(function(f,i){var l=enviado?p.dias[i].litros:null,os=opDia[d+'#'+f]||[];if(l)totDia[i]+=l;
         return '<td class="n pgcell'+(l&&!os.length?' falta':'')+'"><button type="button" class="linkbtn" data-opn="'+d+'|'+f+'|'+(l||'')+'">'+(l?fmt(l):'+')+'</button>'+os.map(function(o){return '<div class="opchip" data-ope="'+esc(o.id)+'">OP '+esc(o.nPedido)+(o.grupo?' · '+esc(o.grupo):'')+'</div>';}).join('')+'</td>';}).join('')+
       '<td class="n"><b>'+(enviado?fmt(sum(p.dias.map(function(x){return x.litros;}))):'')+'</b></td></tr>';}).join('');
@@ -2394,12 +2394,12 @@ function pullPedidos(manual){
 function cumplimientoHTML(jue,ds){
   var gas=getPedidos().filter(function(x){return x.tipo==='gasoil'&&x.estado!=='borrador';});if(!gas.length)return '';
   var ini=gas.map(function(x){return x.fecha;}).sort()[0],sem=[];for(var j=jue,k=0;k<12&&j>=ini;k++,j=addDays(j,-7))sem.unshift(j);
-  var L={ok:['g','A tiempo'],tarde:['y','Fuera de término'],ofi:['r','Cargado por la oficina'],no:['','Sin pedido (no necesitó)'],pend:['','Pendiente']};
+  var L={ok:['g','A tiempo'],tarde:['y','Fuera de término'],ofi:['r','Cargado por la oficina'],no:['','Sin pedido'],pend:['','Pendiente']};
   var filas=ds.map(function(d){var c={ok:0,tarde:0,ofi:0,no:0,pend:0},celdas=sem.map(function(j){var p=getPedidos(d).filter(function(x){return x.id===idPG(d,j);})[0],e=cumplimiento(p||{fecha:j});c[e]++;
       return '<td class="cw"><span class="cdot '+e+'" title="'+esc(fFecha(j)+': '+L[e][1]+(p&&p.oficina?' ('+p.oficina.origen+')':''))+'"></span></td>';}).join('');
     var tot=c.ok+c.tarde+c.ofi;
     return '<tr><td><b>'+esc(D(d).n)+'</b></td>'+celdas+'<td class="n">'+c.ok+'</td><td class="n">'+c.tarde+'</td><td class="n">'+c.ofi+'</td><td class="n">'+c.no+'</td><td class="n"><b>'+(tot?Math.round(c.ok/tot*100)+' %':'—')+'</b></td></tr>';}).join('');
-  return '<div class="card block"><h4>Cumplimiento del programa semanal</h4><p class="hint">Últimas '+sem.length+' semanas, desde que se usa la app. Cada punto es un jueves: verde, enviado a tiempo desde la app; amarillo, fuera de término; rojo, lo cargó la oficina porque llegó por fuera de la app; gris, no hubo pedido esa semana (no necesitó). El cumplimiento se calcula solo sobre las semanas con pedido.</p>'+
+  return '<div class="card block"><h4>Cumplimiento del programa semanal</h4><p class="hint">Últimas '+sem.length+' semanas, desde que se usa la app. Cada punto es un jueves: verde, enviado a tiempo desde la app; amarillo, fuera de término; rojo, lo cargó la oficina porque llegó por fuera de la app; gris, sin pedido esa semana. El cumplimiento se calcula solo sobre las semanas con pedido.</p>'+
     '<div class="tablewrap"><table class="cumpl"><thead><tr><th>Distrito</th>'+sem.map(function(j){return '<th class="cw"><small>'+fFecha(j).slice(0,5)+'</small></th>';}).join('')+'<th>A tiempo</th><th>Tarde</th><th>Oficina</th><th>Sin pedido</th><th>Cumplimiento</th></tr></thead><tbody>'+filas+'</tbody></table></div></div>';
 }
 
