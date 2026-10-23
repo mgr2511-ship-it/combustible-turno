@@ -1084,7 +1084,12 @@ function render(){
 /* al abrir un mes en Calendario, Control o Control físico se trae solo del servidor (una vez cada 10 minutos por mes),
    así no hace falta tocar «Traer del servidor» para ver lo que ya está cargado. */
 var traidos={};
+var pedTraidos=0;
 function autoTraer(){
+  if(VIEW==='pedidos'&&!DEMO&&cfg.syncUrl&&navigator.onLine&&Date.now()-pedTraidos>120000){pedTraidos=Date.now();
+    var antes=JSON.stringify([getPedidos(),getOPs()]);var bt=$('#pdSync');if(bt){bt.disabled=true;bt.textContent='Trayendo…';}
+    pullPedidos(false).then(function(){if(VIEW!=='pedidos')return;if(JSON.stringify([getPedidos(),getOPs()])!==antes)render();else{var b2=$('#pdSync');if(b2){b2.disabled=false;b2.textContent='Actualizar';}}});
+    return;}
   if(['cal','control','fisico'].indexOf(VIEW)<0||DEMO||!cfg.syncUrl||!navigator.onLine||!SELD)return;
   var k=SELD+'|'+CMES,t=traidos[k];if(t&&(t.cargando||Date.now()-t.ts<600000))return;
   traidos[k]={cargando:true,ts:Date.now()};var b=$('#btnTraer');if(b){b.disabled=true;b.textContent='Trayendo…';}
@@ -2366,7 +2371,7 @@ function modalOP(id,pre){
 function pullPedidos(manual){
   if(DEMO||!cfg.syncUrl||!navigator.onLine)return Promise.resolve();
   var ds=isA()?usinas():misDistritos();
-  return getJSON({accion:'pedidos',distritos:ds.join(','),desde:addDays(todayISO(),-120)}).then(function(res){var q=getQueue();
+  return getJSON({accion:'pedidos',distritos:ds.join(','),desde:addDays(todayISO(),-120)}).then(function(res){if(!Array.isArray(res.pedidos))throw new Error('el servidor no tiene el Code.gs v6 publicado (Implementar → Gestionar implementaciones → Nueva versión)');var q=getQueue();
     var lp=getPedidos(),ip={};lp.forEach(function(x,i){ip[x.id]=i;});(res.pedidos||[]).forEach(function(x){if(q.some(function(y){return y.k==='pedido'&&y.id===x.id;}))return;if(ip[x.id]!=null)lp[ip[x.id]]=x;else lp.push(x);});savePedidos(lp);
     var lo=getOPs(),io={};lo.forEach(function(x,i){io[x.id]=i;});(res.ops||[]).forEach(function(x){if(q.some(function(y){return y.k==='op'&&y.id===x.id;}))return;if(io[x.id]!=null)lo[io[x.id]]=x;else lo.push(x);});saveOPs(lo);
     if(manual)toast('Pedidos actualizados.');}).catch(function(e){if(manual)toast('No se pudo actualizar: '+e.message);});
