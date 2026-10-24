@@ -413,6 +413,8 @@ ul.lst{margin:4px 0 8px 18px;padding:0}
 }
 .memb{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--brand);padding-bottom:6px}.memb .dr{text-align:right;line-height:1.35}
 h3.tc{text-align:center;margin:14px 0 10px}td.ex p{margin:0 0 4px;font-size:.86rem;line-height:1.35}th.n{text-align:right}
+.czs{display:inline-grid;grid-template-columns:repeat(7,minmax(46px,1fr));gap:0}.cz{border:1px solid var(--line);text-align:center;font-size:.76rem;padding:1px 3px;white-space:nowrap}.cz.rj{color:var(--danger)}.cz.dv{font-size:.68rem;color:var(--muted)}.cz.vc{background:var(--field)}
+.obsc{margin-top:8px}.obsc textarea{width:100%}
 </style>
 </head>
 <body>
@@ -450,7 +452,7 @@ var TIPOS_INF=['Accidente','Falla de grupo generador','Falla de equipo o instala
 var DEF_CFG={syncUrl:'',syncKey:'',tolL:300,tolP:2,fotoRemito:true,fotoCaud:false,minAntes:15,horasTarde:2,minAut:3,distOv:{},devDist:'',bases:{}};
 var DIAS_LOCAL=120;
 var ROBOT={legajo:'0000',nombre:'Robot-Histórico',iniciales:'rh',cat:'D-1',dist:[],activo:true,robot:true};
-var EST_CAM={d:'Descargada',v:'Vino vacía',o:'Derivada a otro distrito'};
+var EST_CAM={d:'Descargada',r:'Rechazada (no se descargó)',v:'Vino vacía',o:'Derivada a otro distrito'};
 
 /* ---------- almacenamiento ---------- */
 var mem={};
@@ -604,7 +606,7 @@ function estDe(c,k){var e=c.est&&c.est[k];if(e)return e;return (c.cist[k]||0)>0?
 function tSum(c){return sum(c.cist.filter(function(v,k){return estDe(c,k)==='d';}));}
 function camEstados(c){var v=c.cisternas||c.cist||[];return v.map(function(x,k){var e=c.estados&&c.estados[k]||c.est&&c.est[k];return e||((x||0)>0?'d':'v');});}
 function tJustified(c){var s=tSum(c);return c.corregido&&s>0&&c.litros!=null&&Math.abs(c.litros-s)<0.005;}
-function estOk(c){for(var k=0;k<NCAM;k++){var e=estDe(c,k),v=c.cist[k]||0;if(!e)return false;if(e==='d'&&!(v>0))return false;if(e!=='d'&&v>0)return false;if(e==='o'&&!(c.dest&&c.dest[k]))return false;}return true;}
+function estOk(c){for(var k=0;k<NCAM;k++){var e=estDe(c,k),v=c.cist[k]||0;if(!e)return false;if((e==='d'||e==='r')&&!(v>0))return false;if(e!=='d'&&e!=='r'&&v>0)return false;if(e==='o'&&!(c.dest&&c.dest[k]))return false;}return true;}
 function tH2Ok(c){return !!String(c.op).trim()&&!!String(c.entrega).trim()&&tJustified(c)&&estOk(c);}
 function remitoOk(r){return /^\d{4}-\d{8}$/.test(r||'');}
 function horaEnTurno(h,t){if(!h)return true;var hh=+h.slice(0,2);return hh>=t*6&&hh<(t+1)*6;}
@@ -743,7 +745,7 @@ function renderP2(){
     '<p class="hint">Cargá los litros de la columna <b>CANT. A 15°</b> del remito de YPF. Los camiones de YPF tienen 7 cisternas: en cada una elegí si se <b>descargó</b>, si <b>vino vacía</b> o si sigue <b>a otro distrito</b>.</p>'+
     DR.camiones.map(function(t,i){if(!tStarted(t))return '';
       var cs='',ds=usinas().filter(function(x){return x!==DR.dist;});for(var k=0;k<NCAM;k++){var e=estDe(t,k);
-        cs+='<div class="comp'+(e?' e-'+e:'')+'"><label for="cc'+i+'_'+k+'">Cisterna '+(k+1)+'</label><input id="cc'+i+'_'+k+'" class="num" inputmode="decimal" placeholder="0,00" value="'+fmt(t.cist[k],true)+'"'+(e&&e!=='d'?' disabled':'')+'><span class="unit">(Litros)</span>'+
+        cs+='<div class="comp'+(e?' e-'+e:'')+'"><label for="cc'+i+'_'+k+'">Cisterna '+(k+1)+'</label><input id="cc'+i+'_'+k+'" class="num" inputmode="decimal" placeholder="0,00" value="'+fmt(t.cist[k],true)+'"'+(e&&e!=='d'&&e!=='r'?' disabled':'')+'><span class="unit">(Litros)</span>'+
         '<select id="ce'+i+'_'+k+'" aria-label="Estado de la cisterna '+(k+1)+'"><option value="">Elegí</option>'+Object.keys(EST_CAM).map(function(x){return '<option value="'+x+'"'+(e===x?' selected':'')+'>'+EST_CAM[x]+'</option>';}).join('')+'</select>'+
         (e==='o'?'<select id="cd'+i+'_'+k+'" aria-label="Distrito de destino de la cisterna '+(k+1)+'"><option value="">¿A qué distrito?</option>'+ds.map(function(x){return '<option value="'+x+'"'+(t.dest&&t.dest[k]===x?' selected':'')+'>'+esc(distName(x))+'</option>';}).join('')+'</select>':'')+'</div>';}
       return '<section class="h2truck"><h2>Ingreso de camión '+(i+1)+' <span class="chip" id="h2c'+i+'"></span></h2>'+
@@ -754,7 +756,7 @@ function renderP2(){
         '<span class="l">Litros en Hoja 1:</span><output id="h2d'+i+'"></output></div>'+
         fotoHTML('t'+i,t.foto,'Foto del remito en papel',cfg.fotoRemito)+'<div class="cist">'+cs+'</div>'+
         '<label class="check"><input type="checkbox" id="pa'+i+'"'+(t.parcial?' checked':'')+'> Descarga parcial (quedaron cisternas sin descargar)</label>'+
-        (t.parcial?'<div class="field"><label for="mo'+i+'">Motivo de la descarga parcial</label><input id="mo'+i+'" value="'+esc(t.motivo||'')+'" placeholder="Ejemplo: quedó afuera la cisterna 7 por falta de capacidad en la usina"></div>':'')+
+        (t.parcial?'<div class="field"><label for="mo'+i+'">Motivo de la descarga parcial</label><input id="mo'+i+'" value="'+esc(t.motivo||'')+'" placeholder="Ejemplo: se rechazó la cisterna 4 con 5.650 L por falta de capacidad"></div>':'')+
         '<div class="kv solid"><span class="lbl">Total (ingreso)</span><span class="val" id="h2t'+i+'"></span><span class="unit">(Litros)</span></div>'+
         '<button class="corr" type="button" id="corr'+i+'" data-corr="'+i+'">Corregir Litros</button></section>';}).join('')+opsDatalist(DR.dist)+'</div></div>'+firmaHTML();
 }
@@ -846,14 +848,14 @@ function onTurnoInput(e){
   else if((m=id.match(/^en(\d+)$/)))DR.camiones[+m[1]].entrega=el.value.trim();
   else if((m=id.match(/^fr(\d+)$/)))DR.camiones[+m[1]].fecha=el.value;
   else if((m=id.match(/^mo(\d+)$/)))DR.camiones[+m[1]].motivo=el.value;
-  else if((m=id.match(/^cc(\d+)_(\d+)$/))){var tq=DR.camiones[+m[1]],kq=+m[2];tq.cist[kq]=parseAR(el.value);tq.est=tq.est||[];if((tq.cist[kq]||0)>0){tq.est[kq]='d';var sq=$('#ce'+m[1]+'_'+m[2]);if(sq)sq.value='d';}}
+  else if((m=id.match(/^cc(\d+)_(\d+)$/))){var tq=DR.camiones[+m[1]],kq=+m[2];tq.cist[kq]=parseAR(el.value);tq.est=tq.est||[];if((tq.cist[kq]||0)>0&&tq.est[kq]!=='r'){tq.est[kq]='d';var sq=$('#ce'+m[1]+'_'+m[2]);if(sq)sq.value='d';}}
   else return;
   persist();refreshTurno();
 }
 function onTurnoChange(e){var el=e.target,id=el.id||'',m;if(!DR)return;
   if(id==='anomOn'){DR.anom=el.checked?{tipo:'Falla de grupo generador',equipo:'',desc:''}:null;persist();render();}
   else if((m=id.match(/^pa(\d+)$/))){DR.camiones[+m[1]].parcial=el.checked;persist();render();}
-  else if((m=id.match(/^ce(\d+)_(\d+)$/))){var tc=DR.camiones[+m[1]],k=+m[2];tc.est=tc.est||[];tc.dest=tc.dest||[];tc.est[k]=el.value;if(el.value&&el.value!=='d')tc.cist[k]=0;if(el.value!=='o')tc.dest[k]='';tc.corregido=tc.corregido&&tJustified(tc);persist();render();}
+  else if((m=id.match(/^ce(\d+)_(\d+)$/))){var tc=DR.camiones[+m[1]],k=+m[2];tc.est=tc.est||[];tc.dest=tc.dest||[];tc.est[k]=el.value;if(el.value&&el.value!=='d'&&el.value!=='r')tc.cist[k]=0;if(el.value==='r')tc.parcial=true;if(el.value!=='o')tc.dest[k]='';tc.corregido=tc.corregido&&tJustified(tc);persist();render();}
   else if((m=id.match(/^cd(\d+)_(\d+)$/))){var td=DR.camiones[+m[1]];td.dest=td.dest||[];td.dest[+m[2]]=el.value;persist();refreshTurno();}
   else if(id==='anomTipo'||id==='anomEq'||id==='serv')onTurnoInput(e);
 }
@@ -895,7 +897,7 @@ function buildRecord(d,base){
   return Object.assign(base||{},{id:recId(d.dist,d.slot.fecha,d.slot.turno),dist:d.dist,distrito:D(d.dist).n,fecha:d.slot.fecha,turno:d.slot.turno,horario:TURNOS[d.slot.turno],
     inicio:d.slot.inicio,ingresos:c.ingresos,consumo:c.consumo,existencias:d.exist.slice(),cistN:D(d.dist).cist.map(function(x){return x.n;}),total:c.total,observacion:d.obs.trim(),recibe:(d.recibe||'').trim(),
     grupos:(d.grupos||[]).slice(),servicio:d.servicio,anom:d.anom?clone(d.anom):null,
-    camiones:d.camiones.filter(tStarted).map(function(t){return {hora:t.hora,remito:t.remito,litros:t.litros,op:t.op,entrega:t.entrega,fecha:t.fecha||'',cisternas:t.cist.map(function(v,k){return estDe(t,k)==='d'?(v||0):0;}),
+    camiones:d.camiones.filter(tStarted).map(function(t){return {hora:t.hora,remito:t.remito,litros:t.litros,op:t.op,entrega:t.entrega,fecha:t.fecha||'',cisternas:t.cist.map(function(v,k){return estDe(t,k)==='d'?(v||0):0;}),rechazos:t.cist.map(function(v,k){return estDe(t,k)==='r'?(v||0):0;}),
       estados:t.cist.map(function(v,k){return estDe(t,k)||'v';}),destinos:t.cist.map(function(v,k){return estDe(t,k)==='o'&&t.dest?t.dest[k]||'':'';}),foto:t.foto||null,parcial:!!t.parcial,motivo:t.motivo||''};}),
     fotoCaud:d.fotoCaud||null});
 }
@@ -915,7 +917,7 @@ function startEdit(id,solId,back){
   var r=getTurnos().filter(function(x){return x.id===id;})[0];if(!r)return;
   editing=id;editSol=solId||null;editBack=back||null;page=1;
   DR={dist:r.dist,slot:{fecha:r.fecha,turno:r.turno,inicio:r.inicio},obs:r.observacion||'',recibe:r.recibe||'',grupos:(r.grupos||[]).slice(),servicio:r.servicio,anom:r.anom?clone(r.anom):null,
-    camiones:r.camiones.map(function(c){return {hora:c.hora,remito:c.remito,litros:c.litros,op:c.op,entrega:c.entrega,fecha:c.fecha||'',cist:c.cisternas.slice(),est:camEstados(c),dest:(c.destinos||[]).slice(),foto:c.foto||null,parcial:!!c.parcial,motivo:c.motivo||'',corregido:true};}),
+    camiones:r.camiones.map(function(c){return {hora:c.hora,remito:c.remito,litros:c.litros,op:c.op,entrega:c.entrega,fecha:c.fecha||'',cist:c.cisternas.map(function(v,k){return v||(c.rechazos&&c.rechazos[k])||0;}),est:camEstados(c),dest:(c.destinos||[]).slice(),foto:c.foto||null,parcial:!!c.parcial,motivo:c.motivo||'',corregido:true};}),
     exist:r.existencias.slice(),legajo:r.legajo,aclaracion:r.aclaracion,firma:r.firma,fotoCaud:r.fotoCaud||null,gps:r.gps||{}};
   closeModal();VIEW='editor';render();window.scrollTo(0,0);
 }
@@ -1052,6 +1054,7 @@ function obsAutoCU(dist,mes,map){var pl=planillaMes(dist,mes,map),dd=monthDays(m
   pl.rows.slice(0,dd).forEach(function(x,i){var f=pad2(i+1)+'/'+mes.slice(5,7),cams=x.cams.map(function(k){return k.c;});
     if(cams.length>1)o.push('El día '+f+' ingresan '+(cams.length===2?'dos':cams.length===3?'tres':cams.length)+' camiones: '+cams.map(function(c){return c.remito+' ('+fmt(c.litros)+'Lts)';}).join(', '));
     cams.forEach(function(c){var der={};(c.estados||[]).forEach(function(e,k){if(e==='o'){var d=(c.destinos||[])[k]||'';(der[d]=der[d]||[]).push(k+1);}});
+      (c.rechazos||[]).forEach(function(v,k){if(v>0)o.push('El día '+f+' se rechazó la cisterna '+(k+1)+' del remito '+c.remito+' con '+fmt(v)+' Litros'+(c.motivo?' ('+c.motivo+')':''));});
       Object.keys(der).forEach(function(d){o.push('El día '+f+' se derivó '+(der[d].length>1?'las cisternas '+der[d].join(', '):'la cisterna '+der[d][0])+' del remito '+c.remito+' al distrito de '+(d?(D(d)?D(d).n:d):'otro distrito'));});});});
   return o;}
 /** los renglones que van impresos: los cargados a mano (si hay) o los automáticos; nunca más de OBS_RENG */
@@ -1451,7 +1454,9 @@ function modalResumen(dist,mes){
     '<div class="stat"><span>Fuera de tolerancia</span><b>'+ctl.filter(function(x){return x.c.bad;}).length+'</b></div><div class="stat"><span>Anomalías e informes</span><b>'+infs.length+'</b></div><div class="stat"><span>Camiones</span><b>'+cams.length+'</b></div></div>'+
     '<div class="block"><h4>Informes del mes</h4>'+(infs.length?'<div class="tablewrap"><table><thead><tr><th>Informe</th><th>Fecha</th><th>Tipo</th><th>Título</th><th>Estado</th></tr></thead><tbody>'+infs.map(function(x){return '<tr class="click" data-inf="'+esc(x.id)+'"><td>'+esc(informeLabel(x))+'</td><td>'+fFecha(x.fechaHecho)+'</td><td>'+esc(x.tipo)+'</td><td class="wrap">'+esc(x.titulo)+'</td><td>'+estadoTxt(x)+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">Sin informes en el mes.</p>')+'</div>'+
     '<div class="block"><h4>Turnos con observaciones o fuera de tolerancia</h4>'+(function(){var l=ctl.filter(function(x){return x.c.bad||x.r.anom||(x.r.observacion||'').trim();});return l.length?'<div class="tablewrap"><table><thead><tr><th>Turno</th><th>Operador</th><th class="n">Consumo</th><th>Qué pasó y qué revisar</th></tr></thead><tbody>'+l.map(function(x){return '<tr class="click '+(x.c.bad?'row-bad':'')+'" data-tid="'+esc(x.r.id)+'"><td>'+esc(slotLabel(x.r))+'</td><td>'+esc(x.r.aclaracion)+'</td><td class="n">'+fmt(x.r.consumo)+'</td><td class="wrap">'+esc(x.r.observacion||'')+' '+x.c.flags.filter(function(z){return z.c==='r';}).map(function(z){return '<span class="chip r">'+esc(z.t)+'</span>';}).join(' ')+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">Ninguno.</p>';})()+'</div>'+
-    '<div class="block"><h4>Camiones del mes</h4>'+(cams.length?'<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Remito</th><th class="n">Litros</th><th>Descarga</th></tr></thead><tbody>'+cams.map(function(x){return '<tr><td>'+fFecha(x.r.fecha)+'</td><td>'+esc(x.c.hora)+'</td><td>'+esc(x.c.remito)+'</td><td class="n">'+fmt(x.c.litros)+'</td><td>'+(x.c.parcial?'Parcial: '+esc(x.c.motivo):'Completa')+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">Sin camiones.</p>')+
+    '<div class="block"><h4>Camiones del mes</h4>'+(cams.length?'<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Remito</th><th>Cisternas (Litros)</th><th class="n">Litros descargados</th><th>Descarga</th></tr></thead><tbody>'+cams.map(function(x){return '<tr><td>'+fFecha(x.r.fecha)+'</td><td>'+esc(x.c.hora)+'</td><td>'+esc(x.c.remito)+'</td><td>'+cistCeldas(x.c)+'</td><td class="n"><b>'+fmt(litrosDesc(x.c))+'</b></td><td>'+(x.c.parcial?'Parcial: '+esc(x.c.motivo):'Completa')+'</td></tr>';}).join('')+'</tbody></table></div>'+
+      (function(){var au=obsCamAuto(dist,mes,cams),ex=(res&&res.obsCam||[]).join('\n'),ed=isA()||isB();return '<div class="obsc"><b>Observaciones</b>'+(au.length?'<ul class="lst">'+au.map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul>':'<p class="hint">La app agrega sola las cisternas rechazadas, las derivadas y los camiones sin pedido de la oficina.</p>')+
+        '<label for="rsObs" class="hint">Otras observaciones (una por renglón)</label><textarea id="rsObs" rows="3"'+(ed?'':' disabled')+' placeholder="Ejemplo: Se recibió un camión derivado con remito 1116-00088899 por emergencia de YPF">'+esc(ex)+'</textarea>'+(ed?'<div class="row-end"><button class="btn small" type="button" id="rsObsG">Guardar observaciones</button></div>':'')+'</div>';})():'<p class="empty">Sin camiones.</p>')+
     (redecl.length?'<p class="hint">'+redecl.length+' turno(s) con camiones redeclarados por los superiores.</p>':'')+'</div>'+
     '<div class="block"><h4>Firmas del cierre de mes</h4><div class="firmas">'+slot('gerente','Gerente de Distrito',fs.gerente)+slot('jefe','Jefe de División',fs.jefe)+'</div></div>'+
     '<div class="row-end noprint">'+(!enArtifact()?'<button class="ghost" type="button" id="rsPrint">Imprimir o guardar PDF</button>':'')+'<button class="btn primary" data-close type="button">Cerrar</button></div>');
@@ -1462,6 +1467,8 @@ function modalResumen(dist,mes){
       r.firmas[k]={legajo:u.legajo,nombre:u.nombre,cat:u.cat,firma:tmp[k],cuando:new Date().toISOString()};r.historial=(r.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Firmó el resumen mensual'}]);
       r.totales={turnos:ts.length,consumo:sum(ts.map(function(t){return t.consumo;})),ingresos:sum(ts.map(function(t){return t.ingresos;})),informes:infs.map(function(i){return i.id;})};r.estado=estadoAuto(r);
       upsertInforme(r);sync(false);toast('Resumen mensual firmado.');modalResumen(dist,mes);});});
+  if($('#rsObsG'))$('#rsObsG').addEventListener('click',function(){var r=res||{id:rid,dist:dist,distrito:D(dist).n,tipo:'Resumen mensual',mes:mes,anio:mes.slice(0,4),num:0,creado:new Date().toISOString(),fechaHecho:mes+'-'+pad2(dd),titulo:'Resumen mensual '+fMes(mes),firmas:{},historial:[],estado:'pendiente',origen:'manual',demo:DEMO};
+    r.obsCam=$('#rsObs').value.split('\n').map(function(t){return t.trim();}).filter(Boolean);r.historial=(r.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Editó las observaciones de camiones'}]);r.estado=estadoAuto(r);upsertInforme(r);sync(false);toast('Observaciones guardadas.');modalResumen(dist,mes);});
   if($('#rsPrint'))$('#rsPrint').addEventListener('click',function(){verDoc('Resumen mensual · '+D(dist).n+' · '+fMes(mes),pdfResumen(dist,mes),'Resumen mensual '+D(dist).n+' '+fMes(mes));});
   $('#modalCard').addEventListener('click',function(e){var b=e.target.closest('[data-inf]');if(b){modalInforme(b.dataset.inf);return;}var t=e.target.closest('[data-tid]');if(t)modalTurno(t.dataset.tid);});
 }
@@ -1491,7 +1498,7 @@ function pdfResumen(dist,mes){
     'body{font:10pt Arial,Helvetica,sans-serif}.mb{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #1c1a4e;padding-bottom:2mm}.mb .logo{width:17mm;height:12.75mm}.mb .dr{text-align:right;font-size:10.5pt;line-height:1.35}.mb .dr b{font-size:12pt}'+
     'h1{text-align:center;font-size:14pt;margin:5mm 0 4mm}.st{display:grid;grid-template-columns:repeat(6,1fr);gap:2mm;margin-bottom:4mm}.st div{border:1px solid #9aa;border-radius:1.5mm;padding:1.5mm 2mm}.st span{display:block;font-size:7pt;text-transform:uppercase;color:#444}.st b{font-size:11pt}'+
     'h2{font-size:10.5pt;text-transform:uppercase;border-left:1.2mm solid #c4942b;padding-left:2mm;margin:5mm 0 2mm}table{width:100%;border-collapse:collapse}th{background:#eef0f4;font-size:8pt;text-align:left;border-bottom:1px solid #889;padding:1.2mm 1.5mm}td{border-bottom:1px solid #ccd;padding:1mm 1.5mm;vertical-align:top;font-size:8.5pt}th.n,td.n{text-align:right}'+
-    'tr{break-inside:avoid}.ex p{margin:0 0 1mm}.neg{color:#a3261e}.hint{color:#555;font-size:8.5pt}.fir{display:flex;justify-content:space-around;margin-top:14mm}.fir div{width:70mm;text-align:center;font-size:9pt}.fir img{max-height:14mm}.fir .ln{border-top:1px solid #000;padding-top:1mm;font-weight:700}';
+    'tr{break-inside:avoid}.ex p{margin:0 0 1mm}.neg{color:#a3261e}.hint{color:#555;font-size:8.5pt}.czs{display:grid;grid-template-columns:repeat(7,1fr);gap:0}.cz{border:1px solid #bbc;text-align:center;font-size:7.6pt;padding:.4mm .2mm;min-height:4mm;white-space:nowrap;overflow:hidden}.cz.rj{color:#a3261e}.cz.dv{font-size:6.5pt;color:#334}.cz.vc{background:#eee}.cm td{font-size:8.3pt}.obsc{margin-top:3mm;font-size:9pt}.obsc .l{border-bottom:1px dotted #555;padding:.8mm 0}.fir{display:flex;justify-content:space-around;margin-top:14mm}.fir div{width:70mm;text-align:center;font-size:9pt}.fir img{max-height:14mm}.fir .ln{border-top:1px solid #000;padding-top:1mm;font-weight:700}';
   var body='<div class="mb"><img class="logo" src="'+LOGO.sp+'" alt="SP"><div class="dr"><b>Distrito '+esc(dist)+' · '+esc(nd)+'</b><br>'+esc(fMes(mes))+'</div></div>'+
     '<h1>Resumen mensual · Informe de observación y anomalías</h1>'+
     '<div class="st">'+st.map(function(x){return '<div><span>'+x[0]+'</span><b>'+x[1]+'</b></div>';}).join('')+'</div>'+
@@ -1499,10 +1506,25 @@ function pdfResumen(dist,mes){
     '<h2>Turnos con observaciones o fuera de tolerancia</h2><p class="hint">Tolerancia: '+fmt(cfg.tolL)+' L o '+fmt(cfg.tolP)+' % del consumo, lo que sea mayor. «Por existencias» = cierre del turno anterior + camiones − medición al cierre del turno.</p>'+
     (l.length?'<table><colgroup><col style="width:12%"><col style="width:11%"><col style="width:9%"><col style="width:10%"><col style="width:9%"><col></colgroup><thead><tr><th>Turno</th><th>Operador</th><th class="n">Declarado (L)</th><th class="n">Por existencias (L)</th><th class="n">Diferencia (L)</th><th>Qué pasó y qué revisar</th></tr></thead><tbody>'+l.map(function(x){var r=x.r,d=r.consDecl!=null?r2(r.consumo-r.consDecl):null;
       return '<tr><td>'+esc(slotLabel(r))+'</td><td>'+esc(r.aclaracion||'')+'</td><td class="n">'+fmt(r.consDecl!=null?r.consDecl:r.consumo)+'</td><td class="n">'+fmt(r.consumo)+'</td><td class="n'+(d&&Math.abs(d)>tolDe(r.consDecl)?' neg':'')+'">'+(d==null?'—':(d>0?'+':'')+fmt(d))+'</td><td class="ex">'+explicaTurno(r,x.c).map(function(t){return '<p>'+t+'</p>';}).join('')+'</td></tr>';}).join('')+'</tbody></table>':'<p class="hint">Ninguno.</p>')+
-    '<h2>Camiones del mes</h2>'+(cams.length?'<table><thead><tr><th>Fecha</th><th>Hora</th><th>Remito</th><th class="n">Litros</th><th>Descarga</th></tr></thead><tbody>'+cams.map(function(x){return '<tr><td>'+fFecha(x.r.fecha)+'</td><td>'+esc(x.c.hora||'')+'</td><td>'+esc(x.c.remito)+'</td><td class="n">'+fmt(x.c.litros)+'</td><td>'+(x.c.parcial?'Parcial: '+esc(x.c.motivo):'Completa')+'</td></tr>';}).join('')+'<tr><td colspan="3"><b>Total</b></td><td class="n"><b>'+fmt(sum(cams.map(function(x){return x.c.litros;})))+'</b></td><td></td></tr></tbody></table>':'<p class="hint">Sin camiones.</p>')+
+    '<h2>Camiones del mes</h2>'+(cams.length?'<table class="cm"><colgroup><col style="width:11%"><col style="width:7%"><col style="width:14%"><col><col style="width:10%"><col style="width:11%"></colgroup><thead><tr><th>Fecha</th><th>Hora</th><th>Remito</th><th>Cisternas (Litros)</th><th class="n">Litros descargados</th><th>Descarga</th></tr></thead><tbody>'+cams.map(function(x){return '<tr><td>'+fFecha(x.r.fecha)+'</td><td>'+esc(x.c.hora||'')+'</td><td>'+esc(x.c.remito)+'</td><td>'+cistCeldas(x.c,true)+'</td><td class="n"><b>'+fmt(litrosDesc(x.c))+'</b></td><td>'+(x.c.parcial?'Parcial':'Completa')+'</td></tr>';}).join('')+'<tr><td colspan="4"><b>Total</b></td><td class="n"><b>'+fmt(sum(cams.map(function(x){return litrosDesc(x.c);})))+'</b></td><td></td></tr></tbody></table>'+
+      '<div class="obsc"><b><u>Observaciones:</u></b>'+(function(){var ls=obsCamLineas(dist,mes,cams,res);return ls.length?ls.map(function(t){return '<div class="l">'+esc(t)+'</div>';}).join(''):'<div class="l">&nbsp;</div><div class="l">&nbsp;</div>';})()+'</div>':'<p class="hint">Sin camiones.</p>')+
     '<div class="fir">'+[['gerente','Gerente de Distrito'],['jefe','Jefe de División']].map(function(k){var s=f[k[0]],pe=fs[k[0]];return '<div>'+(s&&s.firma?'<img alt="" src="'+s.firma+'">':'<div style="height:14mm"></div>')+'<div class="ln">'+k[1]+'</div><div>'+esc(s?s.nombre:(pe?pe.nombre:''))+'</div></div>';}).join('')+'</div>';
   return docBase('Resumen mensual '+nd+' '+fMes(mes),PAG.a4,css,body);
 }
+
+/* ---------- camiones del mes: cisternas y observaciones ---------- */
+function cistCeldas(c,print){var es=camEstados(c),out=[];for(var k=0;k<7;k++){var e=es[k],v=(c.cisternas||[])[k]||0,rj=(c.rechazos||[])[k]||0,ds=(c.destinos||[])[k];
+    out.push(e==='d'?'<span class="cz">'+fmt(v)+'</span>':e==='r'?'<span class="cz rj" title="Rechazada"><s>'+fmt(rj)+'</s></span>':e==='o'?'<span class="cz dv" title="Derivada a '+esc(ds?nomDist(ds):'otro distrito')+'">→ '+esc(ds?nomDist(ds).slice(0,10):'otro')+'</span>':'<span class="cz vc"></span>');}
+  return '<span class="czs">'+out.join('')+'</span>';}
+function litrosDesc(c){var s=sum((c.cisternas||[]).map(function(v,k){return camEstados(c)[k]==='d'?(v||0):0;}));return s||c.litros||0;}
+function obsCamAuto(dist,mes,cams){var o=[],usaOP=typeof getOPsGas==='function'&&getOPsGas(dist).some(function(x){return (x.fechaDespacho||'').slice(0,7)===mes;});
+  cams.forEach(function(x){var c=x.c,f=fFecha(x.r.fecha).slice(0,5);
+    (c.rechazos||[]).forEach(function(v,k){if(v>0)o.push('El día '+f+' se rechazó la cisterna '+(k+1)+' del remito '+c.remito+' con '+fmt(v)+' Litros'+(c.motivo?' ('+c.motivo+')':'')+'.');});
+    var der={};camEstados(c).forEach(function(e,k){if(e==='o'){var d=(c.destinos||[])[k]||'';(der[d]=der[d]||[]).push(k+1);}});
+    Object.keys(der).forEach(function(d){o.push('El día '+f+' '+(der[d].length>1?'las cisternas '+der[d].join(', ')+' del remito '+c.remito+' siguieron':'la cisterna '+der[d][0]+' del remito '+c.remito+' siguió')+' al distrito de '+(d?nomDist(d):'otro distrito')+'.');});
+    if(usaOP&&(!c.op||!getOPsGas(dist).some(function(z){return z.nPedido===String(c.op).trim();})))o.push('El día '+f+' se descargó el camión con remito '+c.remito+' sin pedido de la oficina (OP'+(c.op?' '+c.op+' no registrada':' sin cargar')+'): cisternas '+camEstados(c).map(function(e,k){return e==='d'?fmt(c.cisternas[k]):null;}).filter(Boolean).join(' / ')+' · Litros totales '+fmt(litrosDesc(c))+'.');});
+  return o;}
+function obsCamLineas(dist,mes,cams,res){var a=obsCamAuto(dist,mes,cams);(res&&res.obsCam||[]).forEach(function(t){if(t&&t.trim())a.push(t.trim());});return a;}
 
 /* =====================================================================
    ADMINISTRACIÓN (categoría A): usuarios, distritos, configuración
