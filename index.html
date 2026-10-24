@@ -396,6 +396,8 @@ table.cumpl th.cw,table.cumpl td.cw{padding:4px 2px;text-align:center;min-width:
 .pgA td .acc .ghost:hover{color:var(--ink)}
 .block .row-end .btn.sec{padding:6px 12px;font-size:.88rem}
 td.acc2{white-space:nowrap}td.acc2 .ghost{margin:1px 2px}
+.obsed{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.obsed summary{cursor:pointer;padding:4px 0}.obsed .field{margin:4px 0}
+.ghost.danger{color:var(--danger);border-color:var(--danger);margin-right:auto}
 </style>
 </head>
 <body>
@@ -1029,6 +1031,18 @@ function cfCalc(dist,mes,map){
   return {pl:pl,cf:cf,L:L,tq:tq,p1:p1,p2:p2,p3:p3,p4:p4,p5:p5,p6:p6,ini:ini,iniFuente:pl.ini.fuente,ing:pl.tot.ing,cons:pl.tot.corr,teor:teor,dif:dif,pct:dif!=null&&pl.tot.corr?r2(dif/pl.tot.corr*100):null};
 }
 
+/* ---------- renglones de «Observación» del Control de Combustible en Usina ---------- */
+var OBS_RENG=6;
+function obsAutoCU(dist,mes,map){var pl=planillaMes(dist,mes,map),dd=monthDays(mes),o=[];
+  pl.rows.slice(0,dd).forEach(function(x,i){var f=pad2(i+1)+'/'+mes.slice(5,7),cams=x.cams.map(function(k){return k.c;});
+    if(cams.length>1)o.push('El día '+f+' ingresan '+(cams.length===2?'dos':cams.length===3?'tres':cams.length)+' camiones: '+cams.map(function(c){return c.remito+' ('+fmt(c.litros)+'Lts)';}).join(', '));
+    cams.forEach(function(c){var der={};(c.estados||[]).forEach(function(e,k){if(e==='o'){var d=(c.destinos||[])[k]||'';(der[d]=der[d]||[]).push(k+1);}});
+      Object.keys(der).forEach(function(d){o.push('El día '+f+' se derivó '+(der[d].length>1?'las cisternas '+der[d].join(', '):'la cisterna '+der[d][0])+' del remito '+c.remito+' al distrito de '+(d?(D(d)?D(d).n:d):'otro distrito'));});});});
+  return o;}
+/** los renglones que van impresos: los cargados a mano (si hay) o los automáticos; nunca más de OBS_RENG */
+function obsCU(dist,mes,map,cf){var a=(cf&&cf.obsCU&&cf.obsCU.some(function(x){return x&&x.trim();}))?cf.obsCU.slice(0,OBS_RENG):obsAutoCU(dist,mes,map);
+  if(a.length>OBS_RENG){a=a.slice(0,OBS_RENG-1).concat([a.slice(OBS_RENG-1).join(' · ')]);}while(a.length<OBS_RENG)a.push('');return a;}
+
 /* =====================================================================
    PANEL DE SUPERIORES (A y B) y pantallas del operador (C)
    ===================================================================== */
@@ -1391,7 +1405,7 @@ function modalInforme(id){
     return '<div class="fslot"><b>'+tit+'</b>'+(s?'<img class="firma-img" alt="Firma de '+esc(s.nombre)+'" src="'+esc(s.firma)+'"><div class="cap">'+esc(s.nombre)+' · legajo '+esc(s.legajo)+'<br>'+fFH(s.cuando)+'</div>':
       (rol===k&&editable?'<canvas class="pad" id="pad_'+k+'"></canvas><div class="row-end"><button class="ghost small" type="button" id="clr_'+k+'">Borrar</button><button class="btn primary small" type="button" id="sig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):' · sin asignar en el distrito')+'</p>'))+'</div>';}
   openModal('<div class="noprint ctl-sum"><span class="chip '+({firmado:'g',pendiente:'y',solicitado:'b'}[x.estado]||'')+'">'+estadoTxt(x)+'</span>'+(x.demo?'<span class="chip">Demostración</span>':'')+'</div>'+
-    '<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.mark+'" alt="SPSE" style="height:48px;border-radius:4px"><div><h3>Informe de observación y anomalías en usina</h3><p class="hint">'+esc(informeLabel(x))+' · '+esc(distName(x.dist))+' · creado '+fFH(x.creado)+(x.creadoPor?' por '+esc(x.creadoPor.nombre):'')+'</p></div></div>'+
+    '<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.sp+'" alt="SPSE" style="width:20mm;height:15mm;object-fit:fill"><div><h3>Informe de observación y anomalías en usina</h3><p class="hint">'+esc(informeLabel(x))+' · '+esc(distName(x.dist))+' · creado '+fFH(x.creado)+(x.creadoPor?' por '+esc(x.creadoPor.nombre):'')+'</p></div></div>'+
     (editable?infFormHTML(x):'<dl class="dl"><dt>Tipo</dt><dd>'+esc(x.tipo)+'</dd><dt>Fecha del hecho</dt><dd>'+fFecha(x.fechaHecho)+'</dd><dt>Título</dt><dd>'+esc(x.titulo)+'</dd><dt>Equipo afectado</dt><dd>'+esc(x.equipo?'Grupo '+x.equipo:'—')+'</dd>'+
       '<dt>Descripción</dt><dd style="white-space:pre-wrap">'+esc(x.descripcion||'—')+'</dd><dt>Acción tomada</dt><dd>'+esc(x.accion||'—')+'</dd><dt>Estado en que queda</dt><dd>'+esc(x.estadoEquipo||'—')+'</dd></dl>')+
     '<div class="block"><h4>Turnos y agentes involucrados</h4>'+(turnos.length?turnos.map(function(r){return '<button class="linkbtn" type="button" data-tid="'+esc(r.id)+'">'+esc(slotLabel(r)+' · '+r.aclaracion+' (legajo '+r.legajo+')')+'</button>';}).join('<br>'):'<p class="empty">Ninguno</p>')+'</div>'+
@@ -1417,7 +1431,7 @@ function modalResumen(dist,mes){
   var redecl=ts.filter(function(r){return (r.ediciones||[]).some(function(e){return /Redeclaración|Camión/.test(e.cambios.join(' '));});});
   function slot(k,tit,persona){var s=f[k];return '<div class="fslot"><b>'+tit+'</b>'+(s?'<img class="firma-img" alt="Firma de '+esc(s.nombre)+'" src="'+esc(s.firma)+'"><div class="cap">'+esc(s.nombre)+' · '+fFH(s.cuando)+'</div>':
     (rol===k?'<canvas class="pad" id="rpad_'+k+'"></canvas><div class="row-end"><button class="btn primary small" type="button" id="rsig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):'')+'</p>'))+'</div>';}
-  openModal('<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.mark+'" alt="SPSE" style="height:48px;border-radius:4px"><div><h3>Resumen mensual · Informe de observación y anomalías</h3><p class="hint">'+esc(distName(dist))+' · '+esc(fMes(mes))+'</p></div></div>'+
+  openModal('<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.sp+'" alt="SPSE" style="width:20mm;height:15mm;object-fit:fill"><div><h3>Resumen mensual · Informe de observación y anomalías</h3><p class="hint">'+esc(distName(dist))+' · '+esc(fMes(mes))+'</p></div></div>'+
     '<div class="stats"><div class="stat"><span>Turnos cerrados</span><b>'+ts.length+' / '+esperados+'</b></div><div class="stat"><span>Consumo</span><b>'+fmt(sum(ts.map(function(r){return r.consumo;})))+' L</b></div><div class="stat"><span>Ingresos</span><b>'+fmt(sum(ts.map(function(r){return r.ingresos;})))+' L</b></div>'+
     '<div class="stat"><span>Fuera de tolerancia</span><b>'+ctl.filter(function(x){return x.c.bad;}).length+'</b></div><div class="stat"><span>Anomalías e informes</span><b>'+infs.length+'</b></div><div class="stat"><span>Camiones</span><b>'+cams.length+'</b></div></div>'+
     '<div class="block"><h4>Informes del mes</h4>'+(infs.length?'<div class="tablewrap"><table><thead><tr><th>Informe</th><th>Fecha</th><th>Tipo</th><th>Título</th><th>Estado</th></tr></thead><tbody>'+infs.map(function(x){return '<tr class="click" data-inf="'+esc(x.id)+'"><td>'+esc(informeLabel(x))+'</td><td>'+fFecha(x.fechaHecho)+'</td><td>'+esc(x.tipo)+'</td><td class="wrap">'+esc(x.titulo)+'</td><td>'+estadoTxt(x)+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">Sin informes en el mes.</p>')+'</div>'+
@@ -1598,8 +1612,16 @@ function docsCUHTML(dist,mes){
   return '<div class="card block docs"><h4>Formato oficial · Control de Combustible en Usina · '+esc(fMes(mes))+'</h4><p class="hint">Se generan sobre el archivo original de la empresa (logo, fuentes y hoja A4). '+(A?'La versión de la categoría A incluye la columna «Archivo» con la corrección del superior.':'Lleva lo declarado por los operadores.')+' Se puede imprimir y firmar a mano, o salir con la firma digital.</p>'+
     '<div class="row-end" style="justify-content:flex-start"><button class="btn primary" type="button" id="cuPdf">PDF (A4)</button><button class="btn" type="button" id="cuXls">Excel del mes</button>'+(A?'<button class="btn" type="button" id="cuXlsA">Excel del año completo</button><button class="ghost" type="button" id="plCsv">CSV comparativo</button>':'')+
     '<label class="check"><input type="checkbox" id="cuFir" checked> Incluir firmas digitales</label></div>'+
-    '<div class="firmas-cf">'+slot('jefe','Jefe de Energía')+slot('gerente','Gerente de Distrito')+'</div></div>';
+    '<div class="firmas-cf">'+slot('jefe','Jefe de Energía')+slot('gerente','Gerente de Distrito')+'</div>'+obsEditorHTML(dist,mes,cf)+'</div>';
 }
+function obsEditorHTML(dist,mes,cf){var map=mapTurnos(getTurnos()),man=!!(cf.obsCU&&cf.obsCU.some(function(x){return x&&x.trim();})),ln=obsCU(dist,mes,map,cf),ed=isA()||isB();
+  return '<details class="obsed"'+(man?' open':'')+'><summary><b>Observación</b> · '+OBS_RENG+' renglones del formato '+(man?'<span class="chip y">cargada a mano</span>':'<span class="chip">automática</span>')+'</summary>'+
+    '<p class="hint">Cada renglón es una línea punteada del formato: así no se alarga la hoja y las firmas quedan en la hoja 1. La app arma sola los camiones múltiples y las cisternas derivadas; podés corregirlos o agregar otros (por ejemplo «Se derivó al distrito de Los Antiguos 2.000 Litros de combustible»).</p>'+
+    ln.map(function(t,i){return '<div class="field"><label for="obC'+i+'">Renglón '+(i+1)+(i===0?' (al lado de «Observación:»)':'')+'</label><input id="obC'+i+'" maxlength="130" value="'+esc(t)+'"'+(ed?'':' disabled')+'></div>';}).join('')+
+    (ed?'<div class="row-end"><button class="ghost" type="button" id="obReset"'+(man?'':' disabled')+'>Volver a las automáticas</button><button class="btn" type="button" id="obSave">Guardar observación</button></div>':'')+'</details>';}
+function guardarObsCU(dist,mes,val){var a=getCFs(),id='CF-'+dist+'-'+mes,rec=a.filter(function(x){return x.id===id;})[0];
+  if(!rec){rec={id:id,dist:dist,mes:mes,fecha:mes+'-'+pad2(monthDays(mes)),hora:'12:00',tanques:null,firmas:{}};a.push(rec);}
+  rec.obsCU=val;rec.actualizado=new Date().toISOString();saveCFs(a);if(!DEMO)queueAdd('cf',id,{auth:authNow()});sync(false);}
 function firmarDoc(titulo,cb){
   openModal('<h3>'+esc(titulo)+'</h3><p class="hint">Firmá con el dedo, el lápiz o el mouse. Queda guardada con tu nombre y la fecha.</p><canvas id="fdPad" class="pad"></canvas><div class="pad-tools"><span>'+esc(me().nombre)+'</span><button class="ghost small" type="button" id="fdClr">Borrar</button></div>'+
     '<div class="row-end"><button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="fdOk">Guardar firma</button></div>',true);
@@ -1613,6 +1635,8 @@ function bindDocsCU(main,dist,mes){
   $('#cuXls').addEventListener('click',function(){toast('Armando el Excel…');excelCU(dist,mes,false).catch(function(e){toast('No se pudo generar: '+e.message);});});
   if($('#cuXlsA'))$('#cuXlsA').addEventListener('click',function(){var y=mes.slice(0,4),ms=[];for(var i=1;i<=12;i++){var m=y+'-'+pad2(i);if(m<=todayISO().slice(0,7))ms.push(m);}
     toast('Trayendo los meses del año y armando el Excel…');ms.reduce(function(p,m){return p.then(function(){return ensureMes(dist,m);});},Promise.resolve()).then(function(){return excelCU(dist,mes,true);}).catch(function(e){toast('No se pudo generar: '+e.message);});});
+  if($('#obSave'))$('#obSave').addEventListener('click',function(){var v=[];for(var i=0;i<OBS_RENG;i++)v.push(($('#obC'+i).value||'').trim());guardarObsCU(dist,mes,v.some(Boolean)?v:null);toast('Observación guardada.');render();});
+  if($('#obReset'))$('#obReset').addEventListener('click',function(){guardarObsCU(dist,mes,null);toast('Se usan las observaciones automáticas.');render();});
   main.addEventListener('click',function(e){var b=e.target.closest('[data-fcu]');if(!b)return;var k=b.dataset.fcu;
     firmarDoc('Firma del '+(k==='jefe'?'Jefe de Energía':'Gerente de Distrito')+' · Control de Usina '+fMes(mes),function(f){var a=getCFs(),id='CF-'+dist+'-'+mes,rec=a.filter(function(x){return x.id===id;})[0];
       if(!rec){rec={id:id,dist:dist,mes:mes,fecha:mes+'-'+pad2(monthDays(mes)),hora:'12:00',tanques:null,firmas:{}};a.push(rec);}
@@ -1946,7 +1970,7 @@ function llenarCU(h,dist,mes,map,conArchivo){
     var cams=x?x.cams.map(function(k){return k.c;}):[];
     if(cams.length===1){h.set('H'+r,cams[0].litros);h.set('I'+r,cams[0].hora||'');h.set('K'+r,cams[0].remito);}
     else if(cams.length>1){h.set('H'+r,cams.map(function(c){return fmt(c.litros);}).join('//'));h.set('I'+r,cams.map(function(c){return c.hora||'s/h';}).join('//'));h.set('K'+r,cams.map(function(c){return c.remito.replace(/^\d{4}-0*/,'');}).join('//'));
-      obs.push('El día '+pad2(d)+'/'+mes.slice(5,7)+' ingresan '+(cams.length===2?'dos':cams.length===3?'tres':cams.length)+' camiones: '+cams.map(function(c){return c.remito+' ('+fmt(c.litros)+'Lts)';}).join(', '));}
+      }
     else{h.set('H'+r,null);h.set('I'+r,null);h.set('K'+r,null);}
     var J=d<=dd&&dec.some(function(v){return v!=null;})?sum(dec):null;h.setF('J'+r,null,J==null?0:J);if(J)totJ+=J;
     // bloques de camiones (N..X, Z..AJ, AL..AV)
@@ -1959,7 +1983,7 @@ function llenarCU(h,dist,mes,map,conArchivo){
     var az=J==null?null:(conArchivo?r2(J+(x?x.aj:0)):J);h.set('AZ'+r,az);h.setF('BA'+r,null,J==null?0:r2(J-(az||0)));if(az)totAZ+=az;
   }
   h.setF('H37','SUM(X6:X36)+SUM(AJ6:AJ36)+SUM(AV6:AV36)',totIng).setF('J37',null,totJ).setF('AZ37',null,totAZ).setF('BA37',null,r2(totJ-totAZ));
-  h.set('C38',obs.join(' · ')||null);
+  var ln=obsCU(dist,mes,map,cfDe(dist,mes));h.set('C38',ln[0]||null);for(var q=1;q<OBS_RENG;q++)h.set('A'+(38+q),ln[q]||null);
   return pl;
 }
 function excelCU(dist,mes,anual){
@@ -2060,18 +2084,17 @@ function pdfCU(dist,mes,o){
   var obs=[],tIng=0,tJ=0;
   var filas=pl.rows.slice(0,dd).map(function(x,i){var t1=x.t[1],med=t1?(t1.medDecl!=null?t1.medDecl:t1.total):null,cams=x.cams.map(function(k){return k.c;}),J=x.dec.some(function(v){return v!=null;})?sum(x.dec):null;
     if(J)tJ+=J;cams.forEach(function(c){tIng+=c.litros;});
-    if(cams.length>1)obs.push('El día '+pad2(i+1)+'/'+mes.slice(5,7)+' ingresan '+(cams.length===2?'dos':cams.length)+' camiones: '+cams.map(function(c){return c.remito+' ('+fmt(c.litros)+'Lts)';}).join(', '));
     var sm=cams.length>1?' class="c sm"':' class="c"';
     return '<tr><td class="c b">'+(i+1)+'</td><td class="c">12:00</td><td class="c">'+fmt(med)+'</td>'+x.dec.map(function(v){return '<td class="c">'+fmt(v)+'</td>';}).join('')+
       '<td'+sm+'>'+cams.map(function(c){return fmt(c.litros);}).join('//')+'</td><td'+sm+'>'+cams.map(function(c){return esc(c.hora||'');}).join('//')+'</td><td class="c">'+fmt(J)+'</td><td'+sm+'>'+(cams.length>1?cams.map(function(c){return esc(c.remito.replace(/^\d{4}-0*/,''));}).join('//'):cams.map(function(c){return esc(c.remito);}).join(''))+'</td></tr>';}).join('');
   var css='.hd{display:flex;align-items:flex-end;gap:6mm;margin-bottom:2mm}.hd h1{flex:1;text-align:center;font-size:16pt;margin:0 0 2mm}.mes{display:flex;justify-content:space-between;font-size:12pt;padding:0 1mm;margin-bottom:.5mm}.mes span:first-child{display:flex;gap:14mm}'+
     'table.cu{width:100%;font-size:9.6pt}table.cu td{white-space:nowrap}table.cu th,table.cu td{border:1px solid #000;padding:.3mm .8mm;height:5.25mm}table.cu th{font-weight:400;line-height:1.15}td.sm{font-size:7.6pt}'+
-    '.tot td{border:0!important}.obs{margin-top:2mm;font-size:10pt}.obs .l{border-bottom:1px dotted #000;height:5.4mm}.fir{display:flex;justify-content:space-around;margin-top:9mm;font:700 9.5pt "Times New Roman"}.fir>div{width:62mm;text-align:center}.fir>div:last-child{width:84mm}';
+    '.tot td{border:0!important}.obs{margin-top:2mm;font-size:10pt}.obs .l{border-bottom:1px dotted #000;height:5.4mm;line-height:5.2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.obs .l1{border-bottom:0}.obs .l span{font-size:9.5pt}.fir{display:flex;justify-content:space-around;margin-top:9mm;font:700 9.5pt "Times New Roman"}.fir>div{width:62mm;text-align:center}.fir>div:last-child{width:84mm}';
   var body='<div class="hd"><img class="logo" src="'+LOGO.sp+'" alt="SP"><h1>CONTROL DE COMBUSTIBLE EN USINA</h1></div>'+
     '<div class="mes"><span><span>MES/AÑO:</span><span>'+esc(fMes(mes).toUpperCase())+'</span></span><span style="margin-right:40mm">DISTRITO: '+esc(D(dist).n.toUpperCase())+'</span></div>'+
     '<table class="cu"><thead><tr><th style="width:5%">Día</th><th>Hora de medición diaria</th><th>Total medición diaria Lts.</th><th>Consumo Turno de 00 a 06</th><th>Consumo Turno de 06 a 12</th><th>Consumo Turno de 12 a 18</th><th>Consumo Turno de 18 a 24</th><th style="width:11%">Litros Ingresados</th><th style="width:10%">Hora de Ingreso</th><th>Consumo Total del día 24hs.</th><th style="width:15%">N° de Remito</th></tr></thead><tbody>'+filas+
     '<tr class="tot"><td colspan="7"></td><td class="c">'+fmt(tIng)+'</td><td></td><td class="c">'+fmt(tJ)+'</td><td></td></tr></tbody></table>'+
-    '<div class="obs"><b><u>Observación:</u></b> '+esc(obs.join(' · '))+'<div class="l"></div><div class="l"></div><div class="l"></div><div class="l"></div><div class="l"></div></div>'+
+    (function(){var ln=obsCU(dist,mes,map,cf);return '<div class="obs"><div class="l l1"><b><u>Observación:</u></b> <span>'+esc(ln[0])+'</span></div>'+ln.slice(1).map(function(t){return '<div class="l"><span>'+esc(t)+'</span></div>';}).join('')+'</div>';})()+
     '<div class="fir"><div><div class="sig">'+firmaImg(fs.jefe)+'</div><div class="ln">Firma del Jefe de Energía</div></div><div><div class="sig">'+firmaImg(fs.gerente)+'</div><div class="ln">Firma del Gerente de Distrito</div></div></div>';
   return docBase('Control de Usina '+D(dist).n+' '+fMes(mes),PAG.a4,css,body);
 }
@@ -2148,7 +2171,7 @@ function pdfPedidoLub(p,o){
   /* fondo = el formulario oficial de la empresa (PEDIDO DE LUBRICANTE - MODELO) a tamaño real; encima se escriben los datos en su lugar */
   function t(x,y,w,txt,cl){return '<div class="v'+(cl?' '+cl:'')+'" style="left:'+x+'mm;top:'+y+'mm;width:'+w+'mm">'+txt+'</div>';}
   function parte(dy){var tb=p.tambores||{},filas=['927','540','R78','431'].map(function(k,i){var n=tb[k];return n?t(97,70.2+i*6.15,83,n+' ('+fmt(n*205)+' L)','c r'):'';}).join(''),kx=tb.KRX;
-    return t(57,47.6+dy,110,esc(D(p.dist)?D(p.dist).n.toUpperCase():''))+t(81,55.3+dy,90,fFecha(p.fecha))+filas.replace(/top:([\d.]+)mm/g,function(m,v){return 'top:'+(+v+dy)+'mm';})+
+    return t(57,47.6+dy,110,esc(p.distTxt||(D(p.dist)?D(p.dist).n.toUpperCase():'')))+t(81,55.3+dy,90,fFecha(p.fecha))+filas.replace(/top:([\d.]+)mm/g,function(m,v){return 'top:'+(+v+dy)+'mm';})+
       t(105,94.2+dy,75,esc(p.tiempo||''))+(kx?t(34.6,100.6+dy,140,'KRIOX ANTICONGELANTE: '+kx+' tambor'+(kx>1?'es':'')+' ('+fmt(kx*205)+' L)','r'):'')+
       (o.firmas&&firmaImg(p.firmaJefe)?'<div class="fi" style="left:42mm;top:'+(108+dy)+'mm">'+firmaImg(p.firmaJefe)+'</div>':'')+(o.firmas&&firmaImg(p.firmaGerente)?'<div class="fi" style="left:118mm;top:'+(108+dy)+'mm">'+firmaImg(p.firmaGerente)+'</div>':'')+
       t(40,119.6+dy,50,esc(p.jefe||''),'c a')+t(116,119.6+dy,50,esc(p.gerente||''),'c a');}
@@ -2163,7 +2186,7 @@ function pdfPedidosLub(ps,o){if(ps.length===1)return pdfPedidoLub(ps[0],o);
   return base.slice(0,base.indexOf('<body>')+6)+hs.map(function(b,i){return '<div style="'+(i?'break-before:page;page-break-before:always':'')+'">'+b+'</div>';}).join('')+'</body></html>';}
 /** arma el pedido de lubricante (formato oficial) a partir de la OP cargada en YPF */
 function lubDesdeOP(op){var lp=op.pedidoLub&&getPedidos().filter(function(x){return x.id===op.pedidoLub;})[0],tb={};(op.items||[]).forEach(function(it){tb[it.k]=it.tambores;});
-  return {id:op.id,tipo:'lub',dist:op.dist,fecha:lp?lp.fecha:op.fechaPedido,tambores:tb,tiempo:lp?lp.tiempo:'',jefe:lp?lp.jefe:'',gerente:lp?lp.gerente:'',firmaJefe:lp?lp.firmaJefe:null,firmaGerente:lp?lp.firmaGerente:null};}
+  return {id:op.id,tipo:'lub',dist:lp?lp.dist:op.dist,distTxt:lp?null:'OFICINA CENTRAL - RÍO GALLEGOS',fecha:lp?lp.fecha:op.fechaPedido,tambores:tb,tiempo:lp?lp.tiempo:'',jefe:lp?lp.jefe:'',gerente:lp?lp.gerente:'',firmaJefe:lp?lp.firmaJefe:null,firmaGerente:lp?lp.firmaGerente:null};}
 
 /* ---------- Pedidos de lubricante cargados en YPF (A4) ---------- */
 function pdfLubYPF(ops,o){
@@ -2211,7 +2234,9 @@ var ORIGENES=['WhatsApp','Mail','Teléfono','Nota en papel','Otro'];
 function getPedidos(dist){var a=sget('cpt.pedidos',[]);return dist?a.filter(function(x){return x.dist===dist;}):a;}
 function savePedidos(a){sset('cpt.pedidos',a);}
 function upsertPedido(p){var a=getPedidos().filter(function(x){return x.id!==p.id;});a.push(p);savePedidos(a);}
-function getOPs(dist){var a=sget('cpt.ops',[]);return dist?a.filter(function(x){return x.dist===dist;}):a;}
+function getOPsAll(){return sget('cpt.ops',[]);}
+/** OP vigentes (las eliminadas quedan guardadas como registro, pero no se muestran) */
+function getOPs(dist){var a=getOPsAll().filter(function(x){return !x.eliminado;});return dist?a.filter(function(x){return x.dist===dist;}):a;}
 /** solo las OP de gasoil (las de lubricante van aparte) */
 function getOPsGas(dist){return getOPs(dist).filter(function(x){return x.tipo!=='lub';});}
 var LUB_DEST=[{n:'31',d:'Río Gallegos',dir:'Córdoba 280',prod:['927','KRX']},{n:'37',d:'Jaramillo',dir:'José M. Estrada s/n (9053) Jaramillo',prod:['431','KRX']},
@@ -2352,7 +2377,7 @@ function compartidoTxt(o){if(!o.grupo)return '—';var otros=getOPsGas().filter(
 /* ---------- lubricantes ---------- */
 function lubListaHTML(dist){var ls=getPedidos(dist).filter(function(x){return x.tipo==='lub';}).sort(function(a,b){return a.fecha<b.fecha?1:-1;});
   return '<div class="card block"><h4>Pedidos de lubricante · '+esc(D(dist).n)+'</h4><p class="hint">Se piden con 25 días de anticipación. Tambor de 205 L.</p>'+(ls.length?'<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Aceites</th><th>Para cubrir</th><th>Estado</th><th>N° de pedido YPF</th><th></th></tr></thead><tbody>'+ls.map(function(p){
-    return '<tr><td>'+fFecha(p.fecha)+'</td><td>'+ACEITES.filter(function(a){return p.tambores&&p.tambores[a.k];}).map(function(a){return esc(a.n)+': '+p.tambores[a.k];}).join('<br>')+'</td><td>'+esc(p.tiempo||'')+'</td><td>'+estadoLub(p)+'</td><td>'+(function(){var o=p.nPedido&&getOPsLub().filter(function(z){return z.nPedido===p.nPedido;})[0];return esc(p.nPedido||'—')+(o?'<br><small class="hint">'+esc(o.estado||'')+(o.fechaDespacho?' · entrega '+fFecha(o.fechaDespacho):'')+(o.destN?' · en '+esc(nomDist(o.destN)):'')+'</small>':'');})()+'</td><td><button class="ghost small" type="button" data-lub="'+esc(p.id)+'">Abrir</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">Sin pedidos de lubricante.</p>')+
+    return '<tr><td>'+fFecha(p.fecha)+'</td><td>'+ACEITES.filter(function(a){return p.tambores&&p.tambores[a.k];}).map(function(a){return esc(a.n)+': '+p.tambores[a.k];}).join('<br>')+'</td><td>'+esc(p.tiempo||'')+'</td><td>'+estadoLub(p)+'</td><td>'+(function(){var o=p.nPedido&&getOPsLub().filter(function(z){return z.nPedido===p.nPedido;})[0],e=o?o.estado:p.opEstado,f=o?o.fechaDespacho:p.opEntrega,dn=o&&o.destN?nomDist(o.destN):p.opDestino;return esc(p.nPedido||'—')+(p.nPedido&&(e||f)?'<br><small class="hint">'+esc(e||'')+(f?' · entrega '+fFecha(f):'')+(dn?' · en '+esc(dn):'')+'</small>':'');})()+'</td><td><button class="ghost small" type="button" data-lub="'+esc(p.id)+'">Abrir</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">Sin pedidos de lubricante.</p>')+
     (isB()?'<div class="row-end"><button class="btn" type="button" id="lubNew">Nuevo pedido de lubricante</button></div>':'')+'</div>';}
 function estadoLub(p){return {borrador:'<span class="chip">Borrador</span>',enviado:'<span class="chip g">Enviado</span>',pedido:'<span class="chip b">Pedido a YPF</span>',entregado:'<span class="chip g">Entregado</span>'}[p.estado]||esc(p.estado);}
 function bindLub(box,dist){if($('#lubNew'))$('#lubNew').addEventListener('click',function(){modalLub(null,dist);});
@@ -2425,13 +2450,14 @@ function modalOP(id,pre){
     '<div class="field"><label for="opE">Estado</label><select id="opE">'+ESTADOS_YPF.map(function(s){return '<option'+(o.estado===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div>'+
     '<div class="field"><label for="opG">Camión compartido</label><input id="opG" value="'+esc(o.grupo||'')+'" list="opGr" placeholder="Ejemplo: PM-BC 28/10"><datalist id="opGr">'+Object.keys(grupos).map(function(g){return '<option value="'+esc(g)+'">';}).join('')+'</datalist></div>'+
     '<div class="field full"><label for="opNo">Nota</label><input id="opNo" value="'+esc(o.nota||'')+'"></div></div><p class="hint" id="opMsg"></p>'+
-    '<div class="row-end"><button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="opSave">Guardar</button></div>',true);
+    '<div class="row-end">'+botonEliminar(id)+'<button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="opSave">Guardar</button></div>',true);
+  bindEliminar(id);
   $('#opSave').addEventListener('click',function(){var n=$('#opN').value.replace(/\D/g,''),m=$('#opMsg');if(!n){m.textContent='Falta el N° de pedido.';return;}
     var c=parseAR($('#opC').value),de=$('#opDe').value;if(!(c>0)){m.textContent='Falta la cantidad pedida.';return;}if(!de){m.textContent='Falta la fecha de despacho.';return;}
     var otro=getOPs().filter(function(x){return x.nPedido===n&&x.id!==o.id;})[0];if(otro){m.textContent='El pedido '+n+' ya está cargado para '+D(otro.dist).n+'.';return;}
     var u=me();o.nPedido=n;o.id=o.id||'OP-'+n;o.dist=$('#opD').value;o.destinatario=ypfDe(o.dist);o.producto=$('#opP').value.trim();o.cant=c;o.fechaPedido=$('#opF').value;o.hora=$('#opH').value;o.fechaDespacho=de;o.estado=$('#opE').value;o.grupo=$('#opG').value.trim();o.nota=$('#opNo').value.trim();
     o.actualizado=new Date().toISOString();o.por={legajo:u.legajo,nombre:u.nombre};
-    var a=getOPs().filter(function(x){return x.id!==o.id;});a.push(o);saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
+    var a=getOPsAll().filter(function(x){return x.id!==o.id;});a.push(o);saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
     var p=getPedidos(o.dist).filter(function(x){return x.tipo==='gasoil'&&x.dias&&x.dias.some(function(d){return d.fecha===de;});})[0];
     getPedidos(o.dist).forEach(function(q){if(q.tipo==='gasoil')revisarCargado(q);});
     var dsSel=diasPedido(pedSem),fuera=de<dsSel[0]||de>dsSel[6];if(fuera)pedSem=juevesDe(addDays(de,-11));
@@ -2439,10 +2465,10 @@ function modalOP(id,pre){
 }
 function pullPedidos(manual){
   if(DEMO||!cfg.syncUrl||!navigator.onLine)return Promise.resolve();
-  var ds=isA()?usinas():misDistritos();
+  var ds=isA()?usinas().concat(['31']):misDistritos();
   return getJSON({accion:'pedidos',distritos:ds.join(','),desde:addDays(todayISO(),-120)}).then(function(res){if(!Array.isArray(res.pedidos))throw new Error('el servidor no tiene el Code.gs v6 publicado (Implementar → Gestionar implementaciones → Nueva versión)');var q=getQueue();
     var lp=getPedidos(),ip={};lp.forEach(function(x,i){ip[x.id]=i;});(res.pedidos||[]).forEach(function(x){if(q.some(function(y){return y.k==='pedido'&&y.id===x.id;}))return;if(ip[x.id]!=null)lp[ip[x.id]]=x;else lp.push(x);});savePedidos(lp);
-    var lo=getOPs(),io={};lo.forEach(function(x,i){io[x.id]=i;});(res.ops||[]).forEach(function(x){if(q.some(function(y){return y.k==='op'&&y.id===x.id;}))return;if(io[x.id]!=null)lo[io[x.id]]=x;else lo.push(x);});saveOPs(lo);
+    var lo=getOPsAll(),io={};lo.forEach(function(x,i){io[x.id]=i;});(res.ops||[]).forEach(function(x){if(q.some(function(y){return y.k==='op'&&y.id===x.id;}))return;if(io[x.id]!=null)lo[io[x.id]]=x;else lo.push(x);});saveOPs(lo);
     if(manual)toast('Pedidos actualizados.');}).catch(function(e){if(manual)toast('No se pudo actualizar: '+e.message);});
 }
 
@@ -2487,19 +2513,19 @@ function lubAHTML(){
         '<td class="acc2"><button class="ghost small" type="button" data-lub="'+esc(p.id)+'">Abrir</button>'+(p.nPedido?'':'<button class="ghost small" type="button" data-oplp="'+esc(p.id)+'">Cargar OP</button>')+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">No hay pedidos de lubricante pendientes de los distritos.</p>')+'</div>'+
     '<div class="card block"><h4>Pedidos de lubricante cargados en YPF</h4><div class="row-end" style="justify-content:flex-start"><button class="btn sec" type="button" id="oplNew">+ Cargar pedido YPF de lubricante</button>'+(ops.length?'<button class="ghost" type="button" id="oplPdf">PDF de todos (formato oficial A4)</button>':'')+'<span class="hint">Cuenta lubricantes '+CUENTA_LUB+'</span></div>'+
     (ops.length?'<div class="tablewrap"><table><thead><tr><th>N° de pedido (OP)</th><th>Destinatario de mercancía</th><th>Productos (código YPF: tambores)</th><th>Litros</th><th>Fecha del pedido</th><th>Entrega preferente</th><th>Estado</th><th></th></tr></thead><tbody>'+ops.map(function(o){
-      return '<tr><td><b>'+esc(o.nPedido)+'</b></td><td>'+esc(o.destN||'')+' · '+esc(nomDist(o.destN||o.dist))+(o.direccion?'<br><small class="hint">'+esc(o.direccion)+'</small>':'')+'<br><small class="hint">pedido de '+esc(nomDist(o.dist))+'</small></td><td>'+prodTxt(o)+'</td><td class="n">'+fmt(o.cant)+'</td><td>'+fFecha(o.fechaPedido)+'</td><td>'+fFecha(o.fechaDespacho)+'</td><td>'+esc(o.estado||'')+'</td><td><button class="ghost small" type="button" data-ople="'+esc(o.id)+'">Editar</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">Sin pedidos de lubricante cargados en YPF en los últimos 60 días.</p>')+'</div>';
+      return '<tr><td><b>'+esc(o.nPedido)+'</b></td><td>'+esc(o.destN||'')+' · '+esc(nomDist(o.destN||o.dist))+(o.direccion?'<br><small class="hint">'+esc(o.direccion)+'</small>':'')+'<br><small class="hint">'+(o.dist==='31'?'Oficina Central - Río Gallegos':'pedido de '+esc(nomDist(o.dist)))+'</small></td><td>'+prodTxt(o)+'</td><td class="n">'+fmt(o.cant)+'</td><td>'+fFecha(o.fechaPedido)+'</td><td>'+fFecha(o.fechaDespacho)+'</td><td>'+esc(o.estado||'')+'</td><td><button class="ghost small" type="button" data-ople="'+esc(o.id)+'">Editar</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">Sin pedidos de lubricante cargados en YPF en los últimos 60 días.</p>')+'</div>';
 }
 function modalOPLub(id,pre){
   var o=id?clone(getOPs().filter(function(x){return x.id===id;})[0]):{id:'',tipo:'lub',nPedido:'',dist:pre.dist||SELD,items:[],fechaPedido:todayISO(),hora:'',fechaDespacho:addDays(todayISO(),25),estado:'En tratamiento',pedidoLub:pre.pedidoLub||'',nota:''};
   var tb={};(o.items||[]).forEach(function(it){tb[it.k]=it.tambores;});
-  function pendDe(d){return getPedidos(d).filter(function(x){return x.tipo==='lub'&&x.estado!=='borrador'&&(x.estado!=='entregado'||x.id===o.pedidoLub);});}
-  if(!id){o.dist=pre.dist||SELD;o.destN=lubDest(o.dist)?o.dist:'31';}
-  if(!id&&o.pedidoLub){var lp=getPedidos().filter(function(x){return x.id===o.pedidoLub;})[0];if(lp){tb=clone(lp.tambores||{});o.dist=lp.dist;o.destN=lubDest(lp.dist)?lp.dist:'31';}}
-  if(!o.destN)o.destN=lubDest(o.dist)?o.dist:'31';
+  function pendDe(){return getPedidos().filter(function(x){return x.tipo==='lub'&&x.estado!=='borrador'&&(x.estado!=='entregado'||x.id===o.pedidoLub);});}
+  var dPre=pre.dist||'';if(!id){o.destN=lubDest(dPre)?dPre:'31';}
+  if(!id&&o.pedidoLub){var lp=getPedidos().filter(function(x){return x.id===o.pedidoLub;})[0];if(lp){tb=clone(lp.tambores||{});o.destN=lubDest(lp.dist)?lp.dist:'31';}}
+  if(!o.destN)o.destN=lubDest(o.dist)?o.dist:'31';o.dist='31';
   openModal('<h3>'+(id?'Pedido YPF de lubricante '+esc(o.nPedido):'Cargar pedido YPF de lubricante')+'</h3><p class="hint">Un N° de pedido (OP) por pedido, con todos sus aceites. Elegí el destinatario de mercancía según la planilla de códigos de YPF. Cuenta lubricantes '+CUENTA_LUB+'.</p>'+
     '<div class="form-grid"><div class="field"><label for="olN">N° de pedido (OP)</label><input id="olN" inputmode="numeric" value="'+esc(o.nPedido)+'"></div>'+
     '<div class="field"><label for="olD">Destinatario de mercancía</label><select id="olD">'+LUB_DEST.map(function(x){return '<option value="'+x.n+'"'+(o.destN===x.n?' selected':'')+'>'+x.n+' · '+esc(x.d)+(x.dir?' · '+esc(x.dir):'')+'</option>';}).join('')+'</select><small class="hint" id="olDH"></small></div>'+
-    '<div class="field"><label for="olPD">Distrito que lo pidió</label><select id="olPD">'+usinas().map(function(d){return '<option value="'+d+'"'+(o.dist===d?' selected':'')+'>'+esc(D(d).n)+'</option>';}).join('')+'</select></div>'+
+    '<div class="field"><label>Lo pide</label><output>Oficina Central - Río Gallegos</output></div>'+
     '<div class="field full"><label for="olP">Pedido del distrito que cubre</label><select id="olP"></select></div></div>'+
     '<div class="tablewrap"><table><thead><tr><th>Producto</th><th>Código YPF</th><th>Tambores</th><th>Litros</th></tr></thead><tbody>'+ACEITES.map(function(a){return '<tr><td>'+esc(a.n)+'</td><td>'+(a.ypf?esc(a.ypf):'<span class="hint">sin código</span>')+'</td><td><input class="num" data-olt="'+a.k+'" value="'+(tb[a.k]||'')+'" style="max-width:90px"></td><td class="n" id="olL'+a.k+'">'+(tb[a.k]?fmt(tb[a.k]*205):'')+'</td></tr>';}).join('')+
     '<tr class="tot"><td colspan="3"><b>Total</b></td><td class="n"><b id="olTot"></b></td></tr></tbody></table></div>'+
@@ -2507,29 +2533,39 @@ function modalOPLub(id,pre){
     '<div class="field"><label for="olE">Fecha preferente de entrega</label><input id="olE" type="date" value="'+esc(o.fechaDespacho)+'"><small class="hint" id="olAnt"></small></div>'+
     '<div class="field"><label for="olS">Estado</label><select id="olS">'+ESTADOS_YPF.map(function(x){return '<option'+(o.estado===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select></div>'+
     '<div class="field full"><label for="olNo">Nota</label><input id="olNo" value="'+esc(o.nota||'')+'"></div></div><p class="hint" id="olMsg"></p>'+
-    '<div class="row-end"><button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="olSave">Guardar</button></div>',true);
+    '<div class="row-end">'+botonEliminar(id)+'<button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="olSave">Guardar</button></div>',true);
+  bindEliminar(id);
   function destH(){var x=lubDest($('#olD').value);$('#olDH').textContent=x?'Cuenta '+CUENTA_LUB+' · productos habituales: '+x.prod.map(function(k){var a=ACEITES.filter(function(z){return z.k===k;})[0];return a?a.n.replace(/\s*\(.*\)/,'')+' ('+a.ypf+')':k;}).join(', '):'';}
-  function opcP(){var d=$('#olPD').value,ls=pendDe(d);$('#olP').innerHTML='<option value="">(sin vincular)</option>'+ls.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===o.pedidoLub?' selected':'')+'>'+fFecha(x.fecha)+' · '+ACEITES.filter(function(a){return x.tambores&&x.tambores[a.k];}).map(function(a){return a.n.replace(/\s*\(.*\)/,'')+' '+x.tambores[a.k];}).join(', ')+(x.nPedido&&x.id!==o.pedidoLub?' · ya tiene OP '+esc(x.nPedido):'')+'</option>';}).join('');}
+  function opcP(){var ls=pendDe();$('#olP').innerHTML='<option value="">(sin vincular)</option>'+ls.map(function(x){return '<option value="'+esc(x.id)+'"'+(x.id===o.pedidoLub?' selected':'')+'>'+esc(D(x.dist).n)+' · '+fFecha(x.fecha)+' · '+ACEITES.filter(function(a){return x.tambores&&x.tambores[a.k];}).map(function(a){return a.n.replace(/\s*\(.*\)/,'')+' '+x.tambores[a.k];}).join(', ')+(x.nPedido&&x.id!==o.pedidoLub?' · ya tiene OP '+esc(x.nPedido):'')+'</option>';}).join('');}
   function tot(){var t=0;ACEITES.forEach(function(a){var n=tb[a.k]||0;t+=n*205;var el=$('#olL'+a.k);if(el)el.textContent=n?fmt(n*205):'';});$('#olTot').textContent=t?fmt(t)+' L':'';
     var f=$('#olF').value,e=$('#olE').value,dd=f&&e?Math.round((new Date(e)-new Date(f))/864e5):null;$('#olAnt').textContent=dd==null?'':(dd<25?'Atención: '+dd+' días de anticipación (se piden con 25).':dd+' días de anticipación.');$('#olAnt').classList.toggle('cbad',dd!=null&&dd<25);}
   opcP();tot();destH();
   var card=$('#modalCard');
   card.addEventListener('input',function(e){var el=e.target;if(el.dataset.olt){var n=parseInt(el.value,10);if(n>0)tb[el.dataset.olt]=n;else delete tb[el.dataset.olt];tot();}else if(el.id==='olF'||el.id==='olE')tot();});
   $('#olD').addEventListener('change',destH);
-  $('#olPD').addEventListener('change',function(){o.pedidoLub='';opcP();if(lubDest($('#olPD').value)){$('#olD').value=$('#olPD').value;destH();}});
+
   $('#olP').addEventListener('change',function(){var lp=getPedidos().filter(function(x){return x.id===$('#olP').value;})[0];if(lp){tb=clone(lp.tambores||{});ACEITES.forEach(function(a){var el=card.querySelector('[data-olt="'+a.k+'"]');if(el)el.value=tb[a.k]||'';});tot();}});
   $('#olSave').addEventListener('click',function(){var m=$('#olMsg'),n=$('#olN').value.replace(/\D/g,'');if(!n){m.textContent='Falta el N° de pedido.';return;}
     var otro=getOPs().filter(function(x){return x.nPedido===n&&x.id!==o.id;})[0];if(otro){m.textContent='El pedido '+n+' ya está cargado para '+nomDist(otro.dist)+'.';return;}
     var items=ACEITES.filter(function(a){return tb[a.k]>0;}).map(function(a){return {k:a.k,ypf:a.ypf,tambores:tb[a.k]};});if(!items.length){m.textContent='Cargá los tambores de al menos un aceite.';return;}
     if(!$('#olE').value){m.textContent='Falta la fecha preferente de entrega.';return;}
-    var u=me(),ant=o.pedidoLub;o.nPedido=n;o.id=o.id||'OP-'+n;o.tipo='lub';o.dist=$('#olPD').value;o.destN=$('#olD').value;var ld=lubDest(o.destN);o.destinatario=o.destN+' · '+(ld?ld.d:'');o.direccion=ld?ld.dir:'';o.cuenta=CUENTA_LUB;o.items=items;o.tambores=sum(items.map(function(x){return x.tambores;}));o.cant=o.tambores*205;
+    var u=me(),ant=o.pedidoLub;o.nPedido=n;o.id=o.id||'OP-'+n;o.tipo='lub';o.dist='31';o.destN=$('#olD').value;var ld=lubDest(o.destN);o.destinatario=o.destN+' · '+(ld?ld.d:'');o.direccion=ld?ld.dir:'';o.cuenta=CUENTA_LUB;o.items=items;o.tambores=sum(items.map(function(x){return x.tambores;}));o.cant=o.tambores*205;
     o.producto='LUBRICANTES · '+items.map(function(x){return x.ypf||x.k;}).join(', ');o.fechaPedido=$('#olF').value;o.hora=$('#olH').value;o.fechaDespacho=$('#olE').value;o.estado=$('#olS').value;o.pedidoLub=$('#olP').value;o.nota=$('#olNo').value.trim();o.actualizado=new Date().toISOString();o.por={legajo:u.legajo,nombre:u.nombre};
-    var a=getOPs().filter(function(x){return x.id!==o.id;});a.push(o);saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
+    var a=getOPsAll().filter(function(x){return x.id!==o.id;});a.push(o);saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
     var ps=getPedidos();ps.forEach(function(x){
-      if(x.id===o.pedidoLub){x.nPedido=n;x.estado=o.estado==='Entregado'?'entregado':o.estado==='Anulado'?'enviado':'pedido';x.actualizado=o.actualizado;if(!DEMO)queueAdd('pedido',x.id,{auth:authNow()});}
-      else if(ant&&x.id===ant&&ant!==o.pedidoLub){x.nPedido='';x.estado='enviado';x.actualizado=o.actualizado;if(!DEMO)queueAdd('pedido',x.id,{auth:authNow()});}});
-    savePedidos(ps);closeModal();sync(false);toast('Pedido YPF de lubricante '+n+' guardado: '+nomDist(o.dist)+' → '+nomDist(o.destN)+'.');render();});
+      if(x.id===o.pedidoLub){x.nPedido=n;x.opEstado=o.estado;x.opEntrega=o.fechaDespacho;x.opDestino=nomDist(o.destN);x.estado=o.estado==='Entregado'?'entregado':o.estado==='Anulado'?'enviado':'pedido';x.actualizado=o.actualizado;if(!DEMO)queueAdd('pedido',x.id,{auth:authNow()});}
+      else if(ant&&x.id===ant&&ant!==o.pedidoLub){x.nPedido='';x.opEstado='';x.opEntrega='';x.estado='enviado';x.actualizado=o.actualizado;if(!DEMO)queueAdd('pedido',x.id,{auth:authNow()});}});
+    savePedidos(ps);closeModal();sync(false);toast('Pedido YPF de lubricante '+n+' guardado para '+o.destN+' · '+nomDist(o.destN)+'.');render();});
 }
+
+/* ---------- eliminar una OP (queda registrada como eliminada, con quién y cuándo) ---------- */
+function eliminarOP(id){var a=getOPsAll(),o=a.filter(function(x){return x.id===id;})[0];if(!o)return;var u=me(),ahora=new Date().toISOString();
+  o.eliminado={legajo:u.legajo,nombre:u.nombre,cuando:ahora};o.estado='Eliminado';o.actualizado=ahora;saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
+  if(o.tipo==='lub'){var ps=getPedidos();ps.forEach(function(x){if(x.tipo==='lub'&&(x.id===o.pedidoLub||x.nPedido===o.nPedido)){x.nPedido='';x.opEstado='';x.opEntrega='';x.estado='enviado';x.actualizado=ahora;if(!DEMO)queueAdd('pedido',x.id,{auth:authNow()});}});savePedidos(ps);}
+  else getPedidos(o.dist).forEach(function(q){if(q.tipo==='gasoil')revisarCargado(q);});
+  sync(false);toast('Pedido YPF '+o.nPedido+' eliminado.');}
+function botonEliminar(id){return id?'<button class="ghost danger" type="button" id="opDel">Eliminar pedido</button>':'';}
+function bindEliminar(id){var b=$('#opDel');if(!b)return;b.addEventListener('click',function(){if(!b.dataset.ok){b.dataset.ok='1';b.textContent='¿Seguro? Tocá de nuevo para eliminar';return;}closeModal();eliminarOP(id);render();});}
 
 /* =====================================================================
    CLIMA (Open-Meteo, sin clave) y serie diaria de consumo por distrito
@@ -2803,7 +2839,7 @@ function enviar(item){
     var rs=pd.oficina&&pd.oficina.respaldo,pre=Promise.resolve();
     if(rs&&rs.id&&!rs.url)pre=fotoGet(rs.id).then(function(data){if(!data)return;return postJSON({accion:'guardarFoto',id:rs.id,nombre:pd.id+'_respaldo',data:data}).then(function(res){var a=getPedidos();a.forEach(function(x){if(x.id===pd.id&&x.oficina&&x.oficina.respaldo)x.oficina.respaldo.url=res.url;});savePedidos(a);fotoDel(rs.id);});});
     return pre.then(function(){var pd2=getPedidos().filter(function(x){return x.id===item.id;})[0];return postJSON({accion:'guardarPedido',pedido:pd2,auth:item.auth});});}
-  if(item.k==='op'){var op=getOPs().filter(function(x){return x.id===item.id;})[0];if(!op)return Promise.resolve();return postJSON({accion:'guardarOP',op:op,auth:item.auth});}
+  if(item.k==='op'){var op=getOPsAll().filter(function(x){return x.id===item.id;})[0];if(!op)return Promise.resolve();return postJSON({accion:'guardarOP',op:op,auth:item.auth});}
   if(item.k==='config'){return postJSON({accion:'guardarConfig',config:{bases:cfg.bases||{},distOv:cfg.distOv,tolL:cfg.tolL,tolP:cfg.tolP,minAut:cfg.minAut,fotoRemito:cfg.fotoRemito,fotoCaud:cfg.fotoCaud,minAntes:cfg.minAntes,horasTarde:cfg.horasTarde},auth:item.auth});}
   return Promise.resolve();
 }
@@ -2853,7 +2889,7 @@ setInterval(function(){if(getQueue().length)sync(false);},120000);
 /* ---------- detalle de lo que falta enviar ---------- */
 var TIPOS_Q={turno:'Turno',informe:'Informe',usuario:'Usuario',cf:'Control físico',pedido:'Pedido',op:'Pedido YPF (OP)',config:'Configuración'};
 function nombreItem(x){var t=TIPOS_Q[x.k]||x.k,d='';
-  if(x.k==='op'){var o=getOPs().filter(function(z){return z.id===x.id;})[0];if(o)d=o.nPedido+' · '+(typeof nomDist==='function'?nomDist(o.dist):o.dist);}
+  if(x.k==='op'){var o=getOPsAll().filter(function(z){return z.id===x.id;})[0];if(o)d=o.nPedido+' · '+(typeof nomDist==='function'?nomDist(o.dist):o.dist);}
   else if(x.k==='pedido'){var pd=getPedidos().filter(function(z){return z.id===x.id;})[0];if(pd)d=(pd.tipo==='lub'?'lubricante':'programa semanal')+' · '+D(pd.dist).n+' · '+fFecha(pd.fecha);}
   else if(x.k==='turno'){var r=getTurnos().filter(function(z){return z.id===x.id;})[0];if(r)d=D(r.dist).n+' · '+fFecha(r.fecha)+' · turno '+(r.turno+1);}
   return t+(d?' ('+d+')':'');}
