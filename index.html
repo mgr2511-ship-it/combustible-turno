@@ -403,6 +403,14 @@ td.acc2{white-space:nowrap}td.acc2 .ghost{margin:1px 2px}
 .pgcell .pidio{font-size:.7rem;color:var(--muted);white-space:nowrap}.pgcell .dfbtn{padding:1px 6px;font-size:.7rem;margin-top:2px}
 .grupos{margin-top:10px;font-size:.88rem;display:grid;gap:4px}.grupos .gwarn{color:var(--warn)}
 ul.lst{margin:4px 0 8px 18px;padding:0}
+
+@media print{
+  body.printing-modal #app{display:none!important}
+  body.printing-modal .modal{position:static!important;inset:auto;overflow:visible!important;height:auto!important;background:none!important;padding:0!important}
+  body.printing-modal .modal-card{max-height:none!important;overflow:visible!important;box-shadow:none!important;margin:0!important;width:auto!important}
+  body.printing-modal{background:#fff!important}
+  @page{margin:10mm}
+}
 </style>
 </head>
 <body>
@@ -1410,7 +1418,7 @@ function modalInforme(id){
     return '<div class="fslot"><b>'+tit+'</b>'+(s?'<img class="firma-img" alt="Firma de '+esc(s.nombre)+'" src="'+esc(s.firma)+'"><div class="cap">'+esc(s.nombre)+' · legajo '+esc(s.legajo)+'<br>'+fFH(s.cuando)+'</div>':
       (rol===k&&editable?'<canvas class="pad" id="pad_'+k+'"></canvas><div class="row-end"><button class="ghost small" type="button" id="clr_'+k+'">Borrar</button><button class="btn primary small" type="button" id="sig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):' · sin asignar en el distrito')+'</p>'))+'</div>';}
   openModal('<div class="noprint ctl-sum"><span class="chip '+({firmado:'g',pendiente:'y',solicitado:'b'}[x.estado]||'')+'">'+estadoTxt(x)+'</span>'+(x.demo?'<span class="chip">Demostración</span>':'')+'</div>'+
-    '<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.sp+'" alt="SPSE" style="width:20mm;height:15mm;object-fit:fill"><div><h3>Informe de observación y anomalías en usina</h3><p class="hint">'+esc(informeLabel(x))+' · '+esc(distName(x.dist))+' · creado '+fFH(x.creado)+(x.creadoPor?' por '+esc(x.creadoPor.nombre):'')+'</p></div></div>'+
+    '<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.sp+'" alt="SPSE" style="width:17mm;height:12.75mm;object-fit:fill"><div><h3>Informe de observación y anomalías en usina</h3><p class="hint">'+esc(informeLabel(x))+' · '+esc(distName(x.dist))+' · creado '+fFH(x.creado)+(x.creadoPor?' por '+esc(x.creadoPor.nombre):'')+'</p></div></div>'+
     (editable?infFormHTML(x):'<dl class="dl"><dt>Tipo</dt><dd>'+esc(x.tipo)+'</dd><dt>Fecha del hecho</dt><dd>'+fFecha(x.fechaHecho)+'</dd><dt>Título</dt><dd>'+esc(x.titulo)+'</dd><dt>Equipo afectado</dt><dd>'+esc(x.equipo?'Grupo '+x.equipo:'—')+'</dd>'+
       '<dt>Descripción</dt><dd style="white-space:pre-wrap">'+esc(x.descripcion||'—')+'</dd><dt>Acción tomada</dt><dd>'+esc(x.accion||'—')+'</dd><dt>Estado en que queda</dt><dd>'+esc(x.estadoEquipo||'—')+'</dd></dl>')+
     '<div class="block"><h4>Turnos y agentes involucrados</h4>'+(turnos.length?turnos.map(function(r){return '<button class="linkbtn" type="button" data-tid="'+esc(r.id)+'">'+esc(slotLabel(r)+' · '+r.aclaracion+' (legajo '+r.legajo+')')+'</button>';}).join('<br>'):'<p class="empty">Ninguno</p>')+'</div>'+
@@ -1424,7 +1432,7 @@ function modalInforme(id){
       x.firmas=x.firmas||{};x.firmas[k]={legajo:u.legajo,nombre:u.nombre,cat:u.cat,firma:firmasTmp[k],cuando:new Date().toISOString()};
       x.historial=(x.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Firmado como '+(k==='gerente'?'Gerente de Distrito':'Jefe de División')}]);x.estado=estadoAuto(x);upsertInforme(x);sync(false);toast('Informe firmado.');modalInforme(x.id);});});
   if($('#ifSave'))$('#ifSave').addEventListener('click',function(){readInfForm(x);x.historial=(x.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Informe completado o modificado'}]);if(x.estado==='solicitado'&&x.descripcion)x.estado='pendiente';upsertInforme(x);sync(false);toast('Informe guardado.');modalInforme(x.id);});
-  if($('#ifPrint'))$('#ifPrint').addEventListener('click',function(){$('#app').classList.add('printing');window.print();setTimeout(function(){$('#app').classList.remove('printing');},500);});
+  if($('#ifPrint'))$('#ifPrint').addEventListener('click',function(){imprimirModal();});
   card.addEventListener('click',function(e){var b=e.target.closest('[data-tid]');if(b)modalTurno(b.dataset.tid);});
 }
 
@@ -1436,7 +1444,7 @@ function modalResumen(dist,mes){
   var redecl=ts.filter(function(r){return (r.ediciones||[]).some(function(e){return /Redeclaración|Camión/.test(e.cambios.join(' '));});});
   function slot(k,tit,persona){var s=f[k];return '<div class="fslot"><b>'+tit+'</b>'+(s?'<img class="firma-img" alt="Firma de '+esc(s.nombre)+'" src="'+esc(s.firma)+'"><div class="cap">'+esc(s.nombre)+' · '+fFH(s.cuando)+'</div>':
     (rol===k?'<canvas class="pad" id="rpad_'+k+'"></canvas><div class="row-end"><button class="btn primary small" type="button" id="rsig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):'')+'</p>'))+'</div>';}
-  openModal('<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.sp+'" alt="SPSE" style="width:20mm;height:15mm;object-fit:fill"><div><h3>Resumen mensual · Informe de observación y anomalías</h3><p class="hint">'+esc(distName(dist))+' · '+esc(fMes(mes))+'</p></div></div>'+
+  openModal('<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.sp+'" alt="SPSE" style="width:17mm;height:12.75mm;object-fit:fill"><div><h3>Resumen mensual · Informe de observación y anomalías</h3><p class="hint">'+esc(distName(dist))+' · '+esc(fMes(mes))+'</p></div></div>'+
     '<div class="stats"><div class="stat"><span>Turnos cerrados</span><b>'+ts.length+' / '+esperados+'</b></div><div class="stat"><span>Consumo</span><b>'+fmt(sum(ts.map(function(r){return r.consumo;})))+' L</b></div><div class="stat"><span>Ingresos</span><b>'+fmt(sum(ts.map(function(r){return r.ingresos;})))+' L</b></div>'+
     '<div class="stat"><span>Fuera de tolerancia</span><b>'+ctl.filter(function(x){return x.c.bad;}).length+'</b></div><div class="stat"><span>Anomalías e informes</span><b>'+infs.length+'</b></div><div class="stat"><span>Camiones</span><b>'+cams.length+'</b></div></div>'+
     '<div class="block"><h4>Informes del mes</h4>'+(infs.length?'<div class="tablewrap"><table><thead><tr><th>Informe</th><th>Fecha</th><th>Tipo</th><th>Título</th><th>Estado</th></tr></thead><tbody>'+infs.map(function(x){return '<tr class="click" data-inf="'+esc(x.id)+'"><td>'+esc(informeLabel(x))+'</td><td>'+fFecha(x.fechaHecho)+'</td><td>'+esc(x.tipo)+'</td><td class="wrap">'+esc(x.titulo)+'</td><td>'+estadoTxt(x)+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">Sin informes en el mes.</p>')+'</div>'+
@@ -1452,7 +1460,7 @@ function modalResumen(dist,mes){
       r.firmas[k]={legajo:u.legajo,nombre:u.nombre,cat:u.cat,firma:tmp[k],cuando:new Date().toISOString()};r.historial=(r.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Firmó el resumen mensual'}]);
       r.totales={turnos:ts.length,consumo:sum(ts.map(function(t){return t.consumo;})),ingresos:sum(ts.map(function(t){return t.ingresos;})),informes:infs.map(function(i){return i.id;})};r.estado=estadoAuto(r);
       upsertInforme(r);sync(false);toast('Resumen mensual firmado.');modalResumen(dist,mes);});});
-  if($('#rsPrint'))$('#rsPrint').addEventListener('click',function(){$('#app').classList.add('printing');window.print();setTimeout(function(){$('#app').classList.remove('printing');},500);});
+  if($('#rsPrint'))$('#rsPrint').addEventListener('click',function(){imprimirModal();});
   $('#modalCard').addEventListener('click',function(e){var b=e.target.closest('[data-inf]');if(b){modalInforme(b.dataset.inf);return;}var t=e.target.closest('[data-tid]');if(t)modalTurno(t.dataset.tid);});
 }
 
@@ -3021,6 +3029,9 @@ else if(DEMO){seedDemoDatos();}
 if(DATA.sim)CMES=DATA.sim.mes;
 render();sync(false);
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')&&!enArtifact()){navigator.serviceWorker.register('sw.js').catch(function(){});}
+
+/** imprime solo el contenido del cuadro abierto (sin la pantalla de fondo, que generaba una hoja en blanco) */
+function imprimirModal(){document.body.classList.add('printing-modal');var fin=function(){document.body.classList.remove('printing-modal');window.removeEventListener('afterprint',fin);};window.addEventListener('afterprint',fin);window.print();setTimeout(fin,1500);}
 
 })();
 </script>
