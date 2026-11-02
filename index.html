@@ -3005,6 +3005,9 @@ function pedidosA(box){
     else if(b.dataset.lub)modalLub(b.dataset.lub,null);});
 }
 var ESTADOS_YPF=['En tratamiento','En tratamiento: Listo para despacho','Despachado','Entregado','Anulado'];
+function avisoOPDup(otro,m){var lub=otro.tipo==='lub',desp=otro.fechaDespacho?fFecha(otro.fechaDespacho):'sin fecha';
+  m.innerHTML='El pedido '+esc(otro.nPedido)+' ya está cargado'+(lub?' como pedido de <b>lubricante</b>':'')+' para <b>'+esc(lub?nomDist(otro.destN||otro.dist):D(otro.dist).n)+'</b>, '+(otro.cant?fmt(otro.cant)+' L, ':'')+(lub?'entrega':'despacho preferente')+' <b>'+esc(desp)+'</b>. Si no lo ves en la lista es porque esa fecha cae fuera de la semana elegida (la lista muestra solo los despachos de esa semana). <button class="btn sec" type="button" id="opDupAbrir">Abrir ese pedido para corregirlo</button>';
+  $('#opDupAbrir').addEventListener('click',function(){closeModal();setTimeout(function(){lub?modalOPLub(otro.id):modalOP(otro.id);},0);});}
 function modalOP(id,pre){
   var o=id?clone(getOPs().filter(function(x){return x.id===id;})[0]):Object.assign({id:'',nPedido:'',dist:pre.dist||SELD,producto:'DIESEL 500',cant:pre.cant||null,fechaPedido:todayISO(),hora:'',fechaDespacho:pre.fechaDespacho||'',estado:'En tratamiento',grupo:'',nota:''},{});
   /* camiones compartidos: solo los de la semana del programa (según la fecha de despacho), no los ya pedidos de semanas anteriores */
@@ -3025,7 +3028,7 @@ function modalOP(id,pre){
   $('#opDe').addEventListener('change',function(){$('#opGr').innerHTML=gruposSemana($('#opDe').value).map(function(g){return '<option value="'+esc(g)+'">';}).join('');});
   $('#opSave').addEventListener('click',function(){var n=$('#opN').value.replace(/\D/g,''),m=$('#opMsg');if(!n){m.textContent='Falta el N° de pedido.';return;}
     var c=parseAR($('#opC').value),de=$('#opDe').value;if(!(c>0)){m.textContent='Falta la cantidad pedida.';return;}if(!de){m.textContent='Falta la fecha de despacho.';return;}
-    var otro=getOPs().filter(function(x){return x.nPedido===n&&x.id!==o.id;})[0];if(otro){m.textContent='El pedido '+n+' ya está cargado para '+D(otro.dist).n+'.';return;}
+    var otro=getOPs().filter(function(x){return x.nPedido===n&&x.id!==o.id;})[0];if(otro){avisoOPDup(otro,m);return;}
     var u=me();o.nPedido=n;o.id=o.id||'OP-'+n;o.dist=$('#opD').value;o.destinatario=ypfDe(o.dist);o.producto=$('#opP').value.trim();o.cant=c;o.fechaPedido=$('#opF').value;o.hora=$('#opH').value;o.fechaDespacho=de;o.estado=$('#opE').value;o.grupo=$('#opG').value.trim();o.nota=$('#opNo').value.trim();
     o.actualizado=new Date().toISOString();o.por={legajo:u.legajo,nombre:u.nombre};
     var a=getOPsAll().filter(function(x){return x.id!==o.id;});a.push(o);saveOPs(a);if(!DEMO)queueAdd('op',o.id,{auth:authNow()});
@@ -3120,7 +3123,7 @@ function modalOPLub(id,pre){
 
   $('#olP').addEventListener('change',function(){var lp=getPedidos().filter(function(x){return x.id===$('#olP').value;})[0];if(lp){tb=clone(lp.tambores||{});ACEITES.forEach(function(a){var el=card.querySelector('[data-olt="'+a.k+'"]');if(el)el.value=tb[a.k]||'';});tot();}});
   $('#olSave').addEventListener('click',function(){var m=$('#olMsg'),n=$('#olN').value.replace(/\D/g,'');if(!n){m.textContent='Falta el N° de pedido.';return;}
-    var otro=getOPs().filter(function(x){return x.nPedido===n&&x.id!==o.id;})[0];if(otro){m.textContent='El pedido '+n+' ya está cargado para '+nomDist(otro.dist)+'.';return;}
+    var otro=getOPs().filter(function(x){return x.nPedido===n&&x.id!==o.id;})[0];if(otro){avisoOPDup(otro,m);return;}
     var items=ACEITES.filter(function(a){return tb[a.k]>0;}).map(function(a){return {k:a.k,ypf:a.ypf,tambores:tb[a.k]};});if(!items.length){m.textContent='Cargá los tambores de al menos un aceite.';return;}
     if(!$('#olE').value){m.textContent='Falta la fecha preferente de entrega.';return;}
     var u=me(),ant=o.pedidoLub;o.nPedido=n;o.id=o.id||'OP-'+n;o.tipo='lub';o.dist='31';o.destN=$('#olD').value;var ld=lubDest(o.destN);o.destinatario=o.destN+' · '+(ld?ld.d:'');o.direccion=ld?ld.dir:'';o.cuenta=CUENTA_LUB;o.items=items;o.tambores=sum(items.map(function(x){return x.tambores;}));o.cant=o.tambores*205;
