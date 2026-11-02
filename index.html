@@ -3004,7 +3004,9 @@ function pedidosA(box){
 var ESTADOS_YPF=['En tratamiento','En tratamiento: Listo para despacho','Despachado','Entregado','Anulado'];
 function modalOP(id,pre){
   var o=id?clone(getOPs().filter(function(x){return x.id===id;})[0]):Object.assign({id:'',nPedido:'',dist:pre.dist||SELD,producto:'DIESEL 500',cant:pre.cant||null,fechaPedido:todayISO(),hora:'',fechaDespacho:pre.fechaDespacho||'',estado:'En tratamiento',grupo:'',nota:''},{});
-  var grupos={};getOPsGas().forEach(function(x){if(x.grupo)grupos[x.grupo]=1;});
+  /* camiones compartidos: solo los de la semana del programa (según la fecha de despacho), no los ya pedidos de semanas anteriores */
+  function gruposSemana(de){var ds=diasPedido(de?juevesDe(addDays(de,-11)):pedSem),g={};getOPsGas().forEach(function(x){if(x.grupo&&x.id!==o.id&&x.fechaDespacho>=ds[0]&&x.fechaDespacho<=ds[6])g[x.grupo]=1;});return Object.keys(g).sort();}
+  var grupos={};gruposSemana(o.fechaDespacho).forEach(function(g){grupos[g]=1;});
   openModal('<h3>'+(id?'Pedido YPF '+esc(o.nPedido):'Cargar pedido YPF')+'</h3><p class="hint">Datos del pedido en el portal de YPF (Pedidos → detalle). Si el camión reparte cisternas entre distritos (por ejemplo Perito Moreno con Bajo Caracoles o Lago Posadas), cargá un pedido por distrito con el mismo «camión compartido».</p>'+
     '<div class="form-grid"><div class="field"><label for="opN">N° de pedido (OP)</label><input id="opN" inputmode="numeric" value="'+esc(o.nPedido)+'"></div>'+
     '<div class="field"><label for="opD">Destinatario de mercancía</label><select id="opD">'+usinas().map(function(d){return '<option value="'+d+'"'+(o.dist===d?' selected':'')+'>'+esc(D(d).n)+(ypfDe(d)?' · '+ypfDe(d):'')+'</option>';}).join('')+'</select></div>'+
@@ -3017,6 +3019,7 @@ function modalOP(id,pre){
     '<div class="field full"><label for="opNo">Nota</label><input id="opNo" value="'+esc(o.nota||'')+'"></div></div><p class="hint" id="opMsg"></p>'+
     '<div class="row-end">'+botonEliminar(id)+'<button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="opSave">Guardar</button></div>',true);
   bindEliminar(id);
+  $('#opDe').addEventListener('change',function(){$('#opGr').innerHTML=gruposSemana($('#opDe').value).map(function(g){return '<option value="'+esc(g)+'">';}).join('');});
   $('#opSave').addEventListener('click',function(){var n=$('#opN').value.replace(/\D/g,''),m=$('#opMsg');if(!n){m.textContent='Falta el N° de pedido.';return;}
     var c=parseAR($('#opC').value),de=$('#opDe').value;if(!(c>0)){m.textContent='Falta la cantidad pedida.';return;}if(!de){m.textContent='Falta la fecha de despacho.';return;}
     var otro=getOPs().filter(function(x){return x.nPedido===n&&x.id!==o.id;})[0];if(otro){m.textContent='El pedido '+n+' ya está cargado para '+D(otro.dist).n+'.';return;}
