@@ -425,6 +425,31 @@ body:has(.login){background:var(--brand)}
 .login .demo-note{background:rgba(255,255,255,.08);color:#f3f1ff;border-color:rgba(255,255,255,.25)}
 .login .btn.brand{background:var(--gold);border-color:var(--gold);color:#14122e}
 .login .btn:not(.brand){background:#fff;color:#14122e;border-color:#fff}
+/* ALTAS */
+.agridbox{margin:8px 0}
+.agrid-head{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:6px}
+.agrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.agrid .dow{font-size:.7rem;font-weight:700;color:var(--muted);text-align:center}
+.aday{border:1px solid var(--line);border-radius:6px;padding:3px;background:var(--sheet);display:flex;flex-direction:column;gap:3px;min-width:0}
+.aday.out{visibility:hidden}.aday.hoy{border-color:var(--gold)}
+.adn{font-weight:700;font-size:.85rem;background:none;border:0;color:var(--ink);cursor:pointer;text-align:left;padding:0 2px}
+.adn:disabled{color:var(--muted);cursor:default}
+.aslots{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.aslot{font-size:.62rem;padding:3px 0;border:1px solid var(--line);border-radius:4px;background:var(--field);color:var(--ink);cursor:pointer;line-height:1.1;position:relative;min-width:0}
+.aslot.tiene{border-style:solid;border-color:var(--ok);box-shadow:inset 0 -3px 0 var(--ok)}
+.aslot[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.aslot:disabled{opacity:.35;cursor:not-allowed}
+.aslot.demo{display:inline-block;padding:1px 6px;cursor:default}
+.agrid-sel{margin:6px 0 0}
+.supm{display:inline-block;font-size:.6rem;font-weight:700;letter-spacing:.03em;background:var(--gold);color:#14122e;border-radius:4px;padding:0 4px;line-height:1.5;vertical-align:middle}
+.day.sup{box-shadow:inset 0 0 0 2px var(--gold)}
+.alta-act{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:8px 0}
+.alta-slots{display:flex;flex-wrap:wrap;gap:6px}
+.avisos-alta p{margin:6px 0}
+.kv input#iniSup{max-width:12rem;font-size:1.2rem;text-align:right}
+@media (max-width:560px){.aslot{font-size:.55rem;padding:4px 0}.agrid{gap:2px}.aday{padding:2px}}
+.aslot .as,.as-hint{display:none}
+@media (max-width:560px){.aslot .al{display:none}.aslot .as{display:inline}.as-hint{display:inline}.aslot{font-size:.6rem;white-space:nowrap}.adn{font-size:.78rem}}
 </style>
 </head>
 <body>
@@ -997,7 +1022,7 @@ function getTurnos(dist){var a=sget('cpt.turnos',[]).map(migrar);return dist?a.f
 function saveTurnos(a){a.sort(function(x,y){return (x.dist+skey(x))<(y.dist+skey(y))?-1:1;});sset('cpt.turnos',a);}
 function upsertTurno(rec){var a=getTurnos();var i=-1;a.forEach(function(x,j){if(x.id===rec.id)i=j;});if(i>=0)a[i]=rec;else a.push(rec);saveTurnos(a);}
 function getQueue(){return sget('cpt.queue',[]);}
-function queueAdd(k,id,extra){var q=getQueue();if(!q.some(function(x){return x.k===k&&x.id===id;}))q.push(Object.assign({k:k,id:id},extra||{}));sset('cpt.queue',q);}
+function queueAdd(k,id,extra){var q=getQueue(),ya=q.filter(function(x){return x.k===k&&x.id===id;})[0];if(ya){if(extra)Object.assign(ya,extra);}else q.push(Object.assign({k:k,id:id},extra||{}));sset('cpt.queue',q);}
 function queueDel(k,id){sset('cpt.queue',getQueue().filter(function(x){return !(x.k===k&&x.id===id);}));}
 function queueErr(k,id,msg){var q=getQueue();q.forEach(function(x){if(x.k===k&&x.id===id){if(msg){x.err=msg;x.errTs=new Date().toISOString();}else{delete x.err;delete x.errTs;}}});sset('cpt.queue',q);}
 function inQueue(k,id){return getQueue().some(function(x){return x.k===k&&x.id===id;});}
@@ -1050,7 +1075,7 @@ function iguales(ex,cist){var out=[];for(var i=0;i<ex.length;i++)for(var j=i+1;j
 /* =====================================================================
    PANTALLA DEL TURNO (categoría C) y editor de turnos cerrados (B)
    ===================================================================== */
-var DR=null,page=1,editing=null,editSol=null,editBack=null;
+var DR=null,page=1,editing=null,editSol=null,editBack=null,editAlta=null;
 
 function draftKey(dist){return 'cpt.draft.'+dist;}
 function hasContent(d){return d&&(d.obs||d.recibe||d.camiones.length||d.exist.some(function(v){return v!=null;})||d.firma||(d.grupos&&d.grupos.length));}
@@ -1060,7 +1085,7 @@ function loadDraft(dist,silent){
   if(d&&d.slot&&skey(d.slot)===skey(slot)&&d.exist&&d.exist.length===D(dist).cist.length){d.slot.inicio=slot.inicio;DR=d;}
   else{if(d&&d.slot&&hasContent(d)&&!silent)toast('El turno '+slotLabel(d.slot)+' ya figura cerrado. Se abrió el turno siguiente.');DR=newDraft(dist,slot);sset(draftKey(dist),DR);page=1;}
 }
-function persist(){if(!editing&&DR)sset(draftKey(DR.dist),DR);}
+function persist(){if(!editing&&DR){if(DR.sup)sset(draftSupKey(DR.dist,DR.slot.fecha,DR.slot.turno),DR);else sset(draftKey(DR.dist),DR);}}
 function CI(){return D(DR.dist).cist;}
 
 /* ---------- GPS ---------- */
@@ -1084,7 +1109,8 @@ function gpsFuera(g,dist){var c=D(dist).coords;return !!(g&&!g.sin&&c&&c.lat!=nu
 function remitosUsados(dist){var m={};getTurnos(dist).forEach(function(t){if(editing&&t.id===editing)return;(t.camiones||[]).forEach(function(c){m[c.remito]=t;});});return m;}
 function maxRemito(dist){var mx=null;getTurnos(dist).forEach(function(t){if(editing&&t.id===editing)return;(t.camiones||[]).forEach(function(c){if(remitoOk(c.remito)&&(!mx||remNum(c.remito)>remNum(mx)))mx=c.remito;});});return mx;}
 function problems(d){
-  var p=[],c=calcD(d),used=remitosUsados(d.dist),seen={},ci=D(d.dist).cist;
+  var p=[],c=calcD(d),used=remitosUsados(d.dist),seen={},ci=D(d.dist).cist,sup=!!d.sup;
+  if(sup&&d.slot.inicio==null)p.push({h:1,m:'Falta el inicio del turno (litros con que se recibió)'});
   d.camiones.forEach(function(t,i){var n='Camión '+(i+1)+': ';
     if(!t.hora)p.push({h:1,m:n+'falta el horario'});
     if(!remitoOk(t.remito))p.push({h:1,m:n+'el remito debe tener el formato 0000-00000000'});
@@ -1105,12 +1131,12 @@ function problems(d){
       else if(e==='d'&&!(v>0))p.push({h:2,m:n+'cisterna '+(k+1)+': marcada como descargada pero sin litros'});
       else if(e==='o'&&!(t.dest&&t.dest[k]))p.push({h:2,m:n+'cisterna '+(k+1)+': elegí el distrito de destino'});}
     if(t.parcial&&!String(t.motivo||'').trim())p.push({h:2,m:n+'explicá por qué la descarga fue parcial'});
-    if(cfg.fotoRemito&&!t.foto&&!editing)p.push({h:2,m:n+'falta la foto del remito'});});
-  if(cfg.fotoCaud&&!d.fotoCaud&&!editing)p.push({h:1,m:'Falta la foto de los caudalímetros'});
+    if(cfg.fotoRemito&&!t.foto&&!editing&&!sup)p.push({h:2,m:n+'falta la foto del remito'});});
+  if(cfg.fotoCaud&&!d.fotoCaud&&!editing&&!sup)p.push({h:1,m:'Falta la foto de los caudalímetros'});
   if(c.allExist&&c.consumo<0&&!d.obs.trim())p.push({h:1,m:'El consumo da negativo: explicá la causa en Observación'});
   if(!editing){
     if(!d.firma)p.push({h:0,m:'Falta la firma'});
-    var fin=slotEnd(d.slot),desde=new Date(fin.getTime()-(cfg.minAntes||0)*60000);
+    var fin=slotEnd(d.slot),desde=new Date(fin.getTime()-(sup?0:(cfg.minAntes||0))*60000);
     if(new Date()<desde)p.unshift({h:0,m:'El turno termina a las '+hhmm(fin)+'. Se puede cerrar desde las '+hhmm(desde)+'.'});
   }
   return p;
@@ -1121,15 +1147,16 @@ function h2Pending(d){return d.camiones.some(function(t){return tStarted(t)&&!tH
 function headHTML(hoja){
   return '<div class="head"><div class="fecha">'+fFecha(DR.slot.fecha)+'</div><div class="distrito"><u>Distrito:</u> <b>'+esc(distName(DR.dist))+'</b></div>'+
     '<h1 class="turno"><u>TURNO:</u> '+TURNOS[DR.slot.turno]+'</h1><div class="hoja-tag">'+(hoja===2?'Hoja 2 · Detalle de camiones':'Hoja 1 · Parte del turno')+'</div></div>'+
-    '<div class="kv"><span class="lbl">Inicio del turno</span><span class="val">'+fmt(DR.slot.inicio,true)+'</span><span class="unit">(Litros)</span></div>';
+    (DR.sup&&DR.sup.inicioLibre?'<div class="kv"><label class="lbl" for="iniSup">Inicio del turno</label><input id="iniSup" class="num val" inputmode="decimal" placeholder="Litros al recibir" value="'+fmt(DR.slot.inicio)+'"><span class="unit">(Litros)</span></div><p class="hint">No hay turno anterior cargado: escribí la existencia total con la que se recibió el turno.</p>':
+    '<div class="kv"><span class="lbl">Inicio del turno</span><span class="val">'+fmt(DR.slot.inicio,true)+'</span><span class="unit">(Litros)</span></div>');
 }
 function firmaHTML(){
   if(editing){return '<section class="firma"><div class="opinfo"><span>Operador: <b>'+esc(DR.aclaracion||'')+'</b> · Legajo '+esc(DR.legajo||'')+'</span></div>'+
     (DR.firma&&String(DR.firma).indexOf('data:')===0?'<img class="firma-img" alt="Firma del operador" src="'+DR.firma+'">':'<p class="hint">Firma guardada en Google Drive.</p>')+'<div class="firma-cap">Firma y aclaración del operador</div></section>';}
   var u=me();
-  return '<section class="firma"><div class="opinfo"><span>Operador: <b>'+esc(u.nombre)+'</b></span><span>Legajo <b>'+esc(u.legajo)+'</b> · '+esc(cargoDe(u).abrev)+'</span></div>'+
+  return '<section class="firma"><div class="opinfo"><span>'+(DR.sup?'Cargado por':'Operador')+': <b>'+esc(u.nombre)+'</b></span><span>Legajo <b>'+esc(u.legajo)+'</b> · '+esc(cargoDe(u).abrev)+'</span></div>'+
     '<canvas id="pad" class="pad" aria-label="Firma del operador"></canvas><div class="pad-tools"><span class="hint">Firmá con el dedo, el lápiz o el mouse</span><button id="padClear" class="ghost small" type="button">Borrar firma</button></div>'+
-    '<div class="firma-cap">Firma y aclaración del operador</div><p class="hint" id="gpsLine">Ubicación: '+esc(gpsTxt(DR.gps&&DR.gps.ini,DR.dist))+'</p></section>';
+    '<div class="firma-cap">'+(DR.sup?'Firma y aclaración de quien carga el turno':'Firma y aclaración del operador')+'</div><p class="hint" id="gpsLine">Ubicación: '+esc(gpsTxt(DR.gps&&DR.gps.ini,DR.dist))+'</p></section>';
 }
 function truckRow(t,i){
   return '<div class="trow"><input type="time" id="th'+i+'" value="'+esc(t.hora)+'" aria-label="Horario camión '+(i+1)+'">'+
@@ -1169,7 +1196,7 @@ function renderP1(){
       '<div class="tank-in"><input id="ce'+i+'" class="num" inputmode="decimal" placeholder="0" value="'+fmt(DR.exist[i])+'"><span class="unit">L</span></div><div class="gauge"><i id="cg'+i+'"></i></div></div>';}).join('')+'</div>'+
     '<div class="kv solid"><span class="lbl">Total (final del turno)</span><span class="val" id="vTot"></span><span class="unit">(Litros)</span></div><div id="igualesMsg"></div>'+
     (DR.slot.turno===1?'<p class="hint">Este total es la <b>medición diaria</b> del '+fFecha(DR.slot.fecha)+'.</p>':'')+
-    fotoHTML('caud',DR.fotoCaud,'Foto de los caudalímetros al cierre',cfg.fotoCaud)+'</div></div>'+firmaHTML();
+    fotoHTML('caud',DR.fotoCaud,'Foto de los caudalímetros al cierre',cfg.fotoCaud&&!DR.sup)+'</div></div>'+firmaHTML();
 }
 function renderP2(){
   return '<div class="frame"><div class="frame-in">'+headHTML(2)+
@@ -1185,7 +1212,7 @@ function renderP2(){
         '<span class="l">Remito:</span><output>'+esc(t.remito||'—')+'</output>'+
         '<label for="fr'+i+'">Fecha del remito:</label><input id="fr'+i+'" type="date" value="'+esc(t.fecha||'')+'">'+
         '<span class="l">Litros en Hoja 1:</span><output id="h2d'+i+'"></output></div>'+
-        fotoHTML('t'+i,t.foto,'Foto del remito en papel',cfg.fotoRemito)+'<div class="cist">'+cs+'</div>'+
+        fotoHTML('t'+i,t.foto,'Foto del remito en papel',cfg.fotoRemito&&!DR.sup)+'<div class="cist">'+cs+'</div>'+
         '<label class="check"><input type="checkbox" id="pa'+i+'"'+(t.parcial?' checked':'')+'> Descarga parcial (quedaron cisternas sin descargar)</label>'+
         (t.parcial?'<div class="field"><label for="mo'+i+'">Motivo de la descarga parcial</label><input id="mo'+i+'" value="'+esc(t.motivo||'')+'" placeholder="Ejemplo: se rechazó la cisterna 4 con 5.650 L por falta de capacidad"></div>':'')+
         '<div class="kv solid"><span class="lbl">Total (ingreso)</span><span class="val" id="h2t'+i+'"></span><span class="unit">(Litros)</span></div>'+
@@ -1202,7 +1229,7 @@ function renderTurnoView(main){
 }
 function turnoActionbar(){
   return '<div class="wrap"><div id="status" class="status"></div><div class="actions"><button id="btnBack" class="btn" type="button" hidden>Hoja 1</button>'+
-    (editing?'<button id="btnCancel" class="btn" type="button">Cancelar</button>':'')+'<button id="btnMain" class="btn primary" type="button">Cerrar Turno</button></div></div>';
+    (editing||(DR&&DR.sup)?'<button id="btnCancel" class="btn" type="button">'+(DR&&DR.sup?'Salir (queda guardado)':'Cancelar')+'</button>':'')+'<button id="btnMain" class="btn primary" type="button">Cerrar Turno</button></div></div>';
 }
 
 function refreshTurno(){
@@ -1236,8 +1263,8 @@ function refreshTurno(){
   var p=problems(DR),pend=h2Pending(DR);bb.hidden=page!==2;
   if(editing){bm.textContent='Guardar cambios';bm.className='btn primary';bm.setAttribute('aria-disabled',p.length?'true':'false');}
   else if(page===1&&pend){bm.textContent='Hoja 2';bm.className='btn goto';bm.setAttribute('aria-disabled','false');}
-  else{bm.textContent='Cerrar Turno';bm.className='btn primary';bm.setAttribute('aria-disabled',p.length?'true':'false');}
-  st.innerHTML=!p.length?'<b>Listo.</b> '+(editing?'Podés guardar los cambios.':'Podés cerrar el turno.'):'<b>'+p.length+' pendiente'+(p.length>1?'s':'')+'.</b> '+esc(p[0].m);
+  else{bm.textContent=DR.sup?'Guardar turno':'Cerrar Turno';bm.className='btn primary';bm.setAttribute('aria-disabled',p.length?'true':'false');}
+  st.innerHTML=!p.length?'<b>Listo.</b> '+(editing||DR.sup?'Podés guardar '+(editing?'los cambios.':'el turno.'):'Podés cerrar el turno.'):'<b>'+p.length+' pendiente'+(p.length>1?'s':'')+'.</b> '+esc(p[0].m);
 }
 
 /* ---------- firma ---------- */
@@ -1268,7 +1295,8 @@ fotoInput.addEventListener('change',function(){var f=fotoInput.files&&fotoInput.
 /* ---------- eventos de la planilla ---------- */
 function onTurnoInput(e){
   var el=e.target,id=el.id||'',m;if(!DR)return;
-  if(id==='obs')DR.obs=el.value;else if(id==='recibe')DR.recibe=el.value;
+  if(id==='iniSup'){DR.slot.inicio=parseAR(el.value);}
+  else if(id==='obs')DR.obs=el.value;else if(id==='recibe')DR.recibe=el.value;
   else if(id==='anomDesc')DR.anom.desc=el.value;else if(id==='anomTipo')DR.anom.tipo=el.value;else if(id==='anomEq')DR.anom.equipo=el.value;
   else if(id==='serv'){DR.servicio=el.value===''?null:+el.value;persist();render();return;}
   else if((m=id.match(/^th(\d+)$/)))DR.camiones[+m[1]].hora=el.value;
@@ -1293,6 +1321,7 @@ function onTurnoChange(e){var el=e.target,id=el.id||'',m;if(!DR)return;
 function onTurnoBlur(e){var el=e.target,id=el.id||'',m;if(!DR)return;
   if((m=id.match(/^tl(\d+)$/)))el.value=fmt(DR.camiones[+m[1]].litros,true);
   else if((m=id.match(/^ce(\d+)$/)))el.value=fmt(DR.exist[+m[1]]);
+  else if(id==='iniSup')el.value=fmt(DR.slot.inicio);
   else if((m=id.match(/^cc(\d+)_(\d+)$/)))el.value=fmt(DR.camiones[+m[1]].cist[+m[2]],true);
 }
 function onTurnoClick(e){
@@ -1311,7 +1340,7 @@ function onTurnoMain(){
   if(!DR)return;var p=problems(DR);
   if(!editing&&page===1&&h2Pending(DR)){page=2;render();window.scrollTo(0,0);return;}
   if(p.length){openModal('<h3>Falta completar</h3><ul>'+p.map(function(x){return '<li>'+esc(x.m)+'</li>';}).join('')+'</ul><div class="row-end"><button class="btn primary" data-close type="button">Entendido</button></div>',true);return;}
-  if(editing)saveEdit();else confirmClose();
+  if(editing)saveEdit();else if(DR.sup)confirmCloseSup();else confirmClose();
 }
 function confirmClose(){
   var c=calcD(DR),u=me();
@@ -1346,13 +1375,14 @@ function doClose(pos){
 /* ---------- edición por superiores (B) ---------- */
 function startEdit(id,solId,back){
   var r=getTurnos().filter(function(x){return x.id===id;})[0];if(!r)return;
-  editing=id;editSol=solId||null;editBack=back||null;page=1;
+  var al=null;if(isB()){al=altaPara(r.dist,r.fecha,r.turno);if(!al){modalPedirAlta({dist:r.dist,slots:[slotK(r.fecha,r.turno)],texto:solId?'Atender el pedido de corrección del operador.':''},'Para corregir este turno necesitás el ALTA de un categoría A.');return;}}
+  editAlta=al?al.id:null;editing=id;editSol=solId||null;editBack=back||null;page=1;
   DR={dist:r.dist,slot:{fecha:r.fecha,turno:r.turno,inicio:r.inicio},obs:r.observacion||'',recibe:r.recibe||'',grupos:(r.grupos||[]).slice(),servicio:r.servicio,anom:r.anom?clone(r.anom):null,
     camiones:r.camiones.map(function(c){return {hora:c.hora,remito:c.remito,litros:c.litros,op:c.op,entrega:c.entrega,fecha:c.fecha||'',cist:c.cisternas.map(function(v,k){return v||(c.rechazos&&c.rechazos[k])||0;}),est:camEstados(c),dest:(c.destinos||[]).slice(),foto:c.foto||null,parcial:!!c.parcial,motivo:c.motivo||'',corregido:true};}),
     exist:r.existencias.slice(),legajo:r.legajo,aclaracion:r.aclaracion,firma:r.firma,fotoCaud:r.fotoCaud||null,gps:r.gps||{}};
   closeModal();VIEW='editor';render();window.scrollTo(0,0);
 }
-function cancelEdit(){editing=null;editSol=null;DR=null;VIEW=editBack||'cal';render();}
+function cancelEdit(){editing=null;editSol=null;editAlta=null;DR=null;VIEW=editBack||'cal';render();}
 function diffRec(o,n){
   var ch=[],ci=n.cistN||[];
   if((o.observacion||'')!==(n.observacion||''))ch.push('Observación modificada');
@@ -1377,7 +1407,10 @@ function saveEdit(){
   if(editSol){(n.solicitudes||[]).forEach(function(s){if(s.id===editSol){s.estado='resuelta';s.resuelta={por:u.nombre,legajo:u.legajo,cuando:new Date().toISOString()};nota=s.texto;}});
     n.observacion=(n.observacion?n.observacion+'\n':'')+'[Corrección autorizada por '+u.nombre+' ('+cargoDe(u).abrev+') el '+fFH(new Date().toISOString())+': '+nota+']';}
   n.ediciones=(old.ediciones||[]).concat([{cuando:new Date().toISOString(),por:u.nombre+' ('+u.cat+')',cambios:ch.length?ch:['Solicitud de corrección atendida sin cambios de valores']}]);
-  if(!n.demo){n.sync='pendiente';queueAdd('turno',n.id);}
+  var alE=editAlta?getAltas().filter(function(y){return y.id===editAlta;})[0]:null;
+  if(editAlta&&(!alE||!altaVigente(alE))){toast('El ALTA venció o fue cancelada: pedí una nueva para guardar la corrección.');return;}
+  if(alE){n.porAlta=(old.porAlta||[]).concat([eventoAlta(alE,u,'correccion',textoAviso(n,u,'correccion',ch,alE))]);n.ediciones[n.ediciones.length-1].alta=alE.id;}
+  if(!n.demo){n.sync='pendiente';queueAdd('turno',n.id,alE?{auth:authNow()}:null);}
   a[idx]=n;cascade(a,n.dist);saveTurnos(a);
   var redecl=ch.filter(function(x){return /^Camión /.test(x);});
   if(redecl.length){var inf=crearInforme({dist:n.dist,tipo:'Redeclaración de camión',fechaHecho:n.fecha,turnos:[n.id],titulo:'Redeclaración de camión · '+slotLabel(n),
@@ -1385,7 +1418,8 @@ function saveEdit(){
       correcciones:redecl.map(function(x){return {campo:x,por:u.nombre,cuando:new Date().toISOString()};})});
     n.informes=(n.informes||[]).concat([inf.id]);upsertTurno(n);}
   toast('Cambios guardados en el turno '+slotLabel(n)+'.'+(redecl.length?' Quedó asentado en un informe.':''));
-  editing=null;editSol=null;DR=null;VIEW=editBack||'cal';render();sync(false);
+  if(alE)marcarAltaUsada(alE.id,slotK(n.fecha,n.turno),n.id);
+  editing=null;editSol=null;editAlta=null;DR=null;VIEW=editBack||'cal';render();sync(false);
 }
 
 /* =====================================================================
@@ -1426,8 +1460,9 @@ function controlDe(r,map,all){
     if(c.op&&typeof getOPsGas==='function'){var ops=getOPsGas(r.dist);if(ops.length&&!ops.some(function(o){return o.nPedido===String(c.op).trim();}))f.push({c:'y',t:'OP '+c.op+' no figura en los pedidos de YPF'});else{var oo=ops.filter(function(o){return o.nPedido===String(c.op).trim();})[0];if(oo&&Math.abs(oo.cant-c.litros)>Math.max(1500,oo.cant*0.05))f.push({c:'b',t:'OP '+c.op+': pedidos '+fmt(oo.cant)+' L, llegaron '+fmt(c.litros)+' L'});}}
     (c.estados||[]).forEach(function(e,k){if(e==='o')f.push({c:'b',t:'Remito '+c.remito+': cisterna '+(k+1)+' sigue a '+((c.destinos&&c.destinos[k])?distName(c.destinos[k]):'otro distrito')});});
     var fa=fechaRemitoAviso(c,r.fecha);if(fa)f.push({c:'y',t:'Remito '+c.remito+': '+fa.toLowerCase()});});
-  var tarde=null;if(r.cerrado&&!r.hist){tarde=(new Date(r.cerrado)-slotEnd(r))/36e5;if(tarde>cfg.horasTarde)f.push({c:'y',t:'Cerrado '+fmt(Math.round(tarde*10)/10)+' h después del fin del turno'});else tarde=null;}
-  if(r.gps){if(r.gps.fin&&r.gps.fin.sin)f.push({c:'',t:'Cierre sin GPS'});else if(gpsFuera(r.gps.fin,r.dist))f.push({c:'y',t:'Cerrado lejos de la usina'});}
+  if(r.cargaSup)f.push({c:'b',t:'Cargado con ALTA por '+r.cargaSup.nombre+(r.cargaSup.fuera?' (fuera de la usina)':'')});
+  var tarde=null;if(r.cerrado&&!r.hist&&!r.cargaSup){tarde=(new Date(r.cerrado)-slotEnd(r))/36e5;if(tarde>cfg.horasTarde)f.push({c:'y',t:'Cerrado '+fmt(Math.round(tarde*10)/10)+' h después del fin del turno'});else tarde=null;}
+  if(r.gps&&!r.cargaSup){if(r.gps.fin&&r.gps.fin.sin)f.push({c:'',t:'Cierre sin GPS'});else if(gpsFuera(r.gps.fin,r.dist))f.push({c:'y',t:'Cerrado lejos de la usina'});}
   if(r.anom)f.push({c:'r',t:'Anomalía: '+r.anom.tipo});
   var sp=(r.solicitudes||[]).filter(function(s){return s.estado==='pendiente';}).length;if(sp)f.push({c:'b',t:sp+' pedido(s) de corrección'});
   if(r.ediciones&&r.ediciones.length)f.push({c:'',t:'Corregido '+r.ediciones.length+' vez/veces'});
@@ -1507,7 +1542,8 @@ function informesAbiertos(){var ds=misDistritos();return getInformes().filter(fu
 
 function tabsFor(){var u=me(),c=catL(u),t=[];
   if(c==='C'){t.push(['turno','Mi turno']);t.push(['misturnos','Mis turnos']);return t;}
-  t.push(['dash','Dashboard'],['cal','Calendario'],['control','Control'],['fisico','Control físico'],['pedidos','Pedidos'],['informes','Informes']);
+  if(c==='A')t.push(['dash','Dashboard']);
+  t.push(['cal','Calendario'],['control','Control'],['fisico','Control físico'],['pedidos','Pedidos'],['informes','Informes']);
   if(c==='B')t.push(['solic','Pedidos de corrección']);
   if(c==='A')t.push(['hist','Histórico'],['usuarios','Usuarios'],['distritos','Distritos']);
   t.push(['config',c==='A'?'Configuración':'Mi cuenta']);return t;}
@@ -1516,12 +1552,12 @@ function renderShell(){
   var u=me(),c=catL(u),tabs=tabsFor(),ds=misDistritos();
   if(!VIEW||!tabs.some(function(t){return t[0]===VIEW;})&&VIEW!=='editor')VIEW=tabs[0][0];
   if(!SELD||ds.indexOf(SELD)<0)SELD=c==='C'?(u.dist||[])[0]:(ds.indexOf(cfg.devDist)>=0?cfg.devDist:ds[0]);
-  var nSol=c==='B'?solicitudesPend().length:0,nInf=informesAbiertos().length;
+  var nSol=c==='B'?solicitudesPend().length:0,nInf=informesAbiertos().length+(c==='A'?altasPedidas().length:0),nCal=c==='B'?misAltasActivas().length:0;
   var head='<header class="topbar"><div class="wrap '+(c==='C'||VIEW==='editor'?'':'wide')+'"><div class="brand"><img src="'+LOGO.mark+'" alt="SPSE"><div><b>Control de Usina</b><small>Servicios Públicos S.E.'+(DEMO?' · demostración':'')+'</small></div></div>'+
     '<div class="tb-right"><div class="who"><b>'+esc(u.nombre)+'</b>'+esc(u.legajo+' · '+cargoDe(u).abrev+' · '+u.cat)+'</div><span id="syncPill" class="pill">…</span><button class="ghost small" id="btnSalir" type="button">Salir</button></div></div></header>';
   var nav='';
   if(VIEW!=='editor'){
-    nav='<nav class="tabsbar" aria-label="Secciones"><div class="wrap '+(c==='C'?'':'wide')+'"><div class="navtabs">'+tabs.map(function(t){var b=t[0]==='solic'&&nSol?'<span class="badge">'+nSol+'</span>':t[0]==='informes'&&nInf?'<span class="badge">'+nInf+'</span>':'';
+    nav='<nav class="tabsbar" aria-label="Secciones"><div class="wrap '+(c==='C'?'':'wide')+'"><div class="navtabs">'+tabs.map(function(t){var b=t[0]==='solic'&&nSol?'<span class="badge">'+nSol+'</span>':t[0]==='informes'&&nInf?'<span class="badge">'+nInf+'</span>':t[0]==='cal'&&nCal?'<span class="badge" title="ALTA activa">'+nCal+'</span>':'';
       return '<button class="navtab" type="button" data-view="'+t[0]+'" aria-current="'+(VIEW===t[0]?'page':'false')+'">'+t[1]+b+'</button>';}).join('')+'</div>'+
       (c!=='C'&&ds.length>1?'<label class="distsel">Distrito <select id="selDist">'+ds.map(function(d){return '<option value="'+d+'"'+(d===SELD?' selected':'')+'>'+esc(distName(d))+'</option>';}).join('')+'</select></label>':c!=='C'?'<span class="distsel">'+esc(distName(SELD))+'</span>':'')+
       '</div></nav>';
@@ -1548,6 +1584,7 @@ function renderNow(){
   if(VIEW==='turno'||VIEW==='editor'){
     if(VIEW==='turno'&&(!DR||DR.dist!==u.dist[0]))loadDraft(u.dist[0],true);
     if(VIEW==='turno'&&DR&&!(DR.gps&&DR.gps.ini)){DR.gps=DR.gps||{};getPos().then(function(p){if(!DR)return;DR.gps.ini=p;persist();var l=$('#gpsLine');if(l)l.textContent='Ubicación: '+gpsTxt(p,DR.dist);});}
+    if(VIEW==='editor'&&DR&&DR.sup){var alB=getAltas().filter(function(y){return y.id===DR.sup.alta;})[0];main.insertAdjacentHTML('beforebegin','<div class="wrap"><div class="banner edit"><span>Cargando el turno '+esc(slotLabel(DR.slot))+' de '+esc(distName(DR.dist))+' con ALTA'+(alB&&alB.otorgada?' de '+esc(alB.otorgada.nombre)+' · '+esc(venceTxt(alB)):'')+'. Es el mismo formulario del operador; la foto del remito es opcional.</span></div></div>');}
     if(editing)main.insertAdjacentHTML('beforebegin','<div class="wrap"><div class="banner edit"><span>Corrigiendo el turno '+esc(slotLabel(DR.slot))+' de '+esc(distName(DR.dist))+(editSol?' (pedido de corrección)':'')+'</span></div></div>');
     renderTurnoView(main);
     if(DR){ab.hidden=false;ab.innerHTML=turnoActionbar();refreshTurno();}
@@ -1641,25 +1678,32 @@ function viewCal(main){
       else if(cur&&cur.fecha===f&&cur.turno===t){cls='open';tit+='turno en curso';}
       else{tit+='sin cerrar';if(f<todayISO())tot.falt++;}
       sq+='<i class="'+cls+'" title="'+esc(tit)+'"></i>';}
-    cells+='<button type="button" class="day" data-dia="'+f+'"><span class="dn">'+d+(infd?'<span class="inf">'+infd+' inf.</span>':'')+'</span><span class="tq">'+sq+'</span></button>';}
+    var sup=[0,1,2,3].some(function(t){var r=map[dist+'#'+f+'#'+t];return r&&r.porAlta&&r.porAlta.length;});if(sup)tot.sup=(tot.sup||0)+1;
+    cells+='<button type="button" class="day'+(sup?' sup':'')+'" data-dia="'+f+'"><span class="dn">'+d+(sup?'<span class="supm" title="Cargado o corregido por un superior con ALTA">ALTA</span>':'')+(infd?'<span class="inf">'+infd+' inf.</span>':'')+'</span><span class="tq">'+sq+'</span></button>';}
   main.innerHTML='<div class="wrap wide panel"><div class="ptitle"><div><h1>Calendario de turnos</h1><p>'+esc(distName(dist))+' · '+esc(fMes(CMES))+'</p></div>'+
     '<div class="toolbar"><div class="field"><label for="calMes">Mes</label><input id="calMes" type="month" value="'+CMES+'"></div><button class="ghost" type="button" id="btnTraer">Traer del servidor</button></div></div>'+
-    '<div class="legend"><span><i style="background:var(--ok)"></i>Sin observaciones ('+tot.ok+')</span><span><i style="background:var(--warn)"></i>Con avisos ('+tot.y+')</span><span><i style="background:var(--danger)"></i>Fuera de tolerancia o anomalía ('+tot.r+')</span><span><i style="border:1px dashed var(--accent)"></i>En curso</span><span><i style="background:var(--field);border:1px solid var(--line)"></i>Sin cerrar ('+tot.falt+')</span></div>'+
+    '<div class="legend"><span><i style="background:var(--ok)"></i>Sin observaciones ('+tot.ok+')</span><span><i style="background:var(--warn)"></i>Con avisos ('+tot.y+')</span><span><i style="background:var(--danger)"></i>Fuera de tolerancia o anomalía ('+tot.r+')</span><span><i style="border:1px dashed var(--accent)"></i>En curso</span><span><i style="background:var(--field);border:1px solid var(--line)"></i>Sin cerrar ('+tot.falt+')</span><span><b class="supm">ALTA</b> Cargado por un superior ('+(tot.sup||0)+')</span></div>'+(isB()?altasCardB():'')+
     '<div class="cal">'+cells+'</div><p class="hint">Cada día muestra los cuatro turnos en orden: 00-06, 06-12, 12-18 y 18-24. Tocá un día para ver el detalle.</p></div>';
   $('#calMes').addEventListener('change',function(e){if(e.target.value){CMES=e.target.value;render();}});
   $('#btnTraer').addEventListener('click',function(){downloadMonth(SELD,CMES);});
   main.addEventListener('click',function(e){var b=e.target.closest('[data-dia]');if(b)modalDia(SELD,b.dataset.dia);});
+  altasBind(main);
 }
 function modalDia(dist,f){
   var all=getTurnos(),map=mapTurnos(all),cur=currentSlot(dist),rows='';
   for(var t=0;t<4;t++){var r=map[dist+'#'+f+'#'+t];
     if(r){var c=controlDe(r,map,all);rows+='<tr class="click '+(c.bad?'row-bad':'')+'" data-tid="'+esc(r.id)+'"><td>'+TURNOS[t]+'</td><td>'+esc(r.aclaracion)+'<br><small class="hint">Legajo '+esc(r.legajo)+'</small></td><td class="n">'+fmt(r.consumo)+'</td><td class="n">'+(r.ingresos?fmt(r.ingresos):'—')+'</td><td>'+esc((r.grupos||[]).join(', ')||'—')+'</td><td class="wrap">'+c.flags.map(function(z){return '<span class="chip '+z.c+'">'+esc(z.t)+'</span>';}).join(' ')+'</td></tr>';}
-    else rows+='<tr><td>'+TURNOS[t]+'</td><td colspan="5" class="hint">'+(cur&&cur.fecha===f&&cur.turno===t?'Turno en curso':'Sin cerrar')+'</td></tr>';}
-  var infs=getInformes(dist).filter(function(x){return x.fechaHecho===f;});
+    else{var enC=cur&&cur.fecha===f&&cur.turno===t&&!slotTerminado(f,t),acc='';
+      if(!enC&&slotTerminado(f,t)){if(isB())acc=altaPara(dist,f,t)?' <button class="btn primary small" type="button" data-sup="'+t+'">Cargar este turno</button>':' <button class="ghost small" type="button" data-pedalta="'+t+'">Pedir ALTA para cargarlo</button>';
+        else if(histOn())acc=' <button class="ghost small" type="button" data-hnew="'+t+'">Cargar (Robot-Histórico)</button>';}
+      rows+='<tr><td>'+TURNOS[t]+'</td><td colspan="5" class="hint">'+(enC?'Turno en curso':slotTerminado(f,t)?'Sin cerrar':'Todavía no terminó')+acc+'</td></tr>';}}
+  var infs=getInformes(dist).filter(function(x){return x.fechaHecho===f;}),avs=avisosDia(dist,f);
   openModal('<h3>'+esc(distName(dist))+' · '+fFecha(f)+'</h3><div class="tablewrap"><table><thead><tr><th>Turno</th><th>Operador</th><th>Consumo (L)</th><th>Ingresos (L)</th><th>Grupos</th><th>Avisos</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     (infs.length?'<div class="block"><h4>Informes del día</h4>'+infs.map(function(x){return '<button class="linkbtn" type="button" data-inf="'+esc(x.id)+'">'+esc(informeLabel(x)+' · '+x.tipo+' · '+estadoTxt(x))+'</button>';}).join('<br>')+'</div>':'')+
+    (avs.length?'<div class="block avisos-alta"><h4>Cargado por superiores con ALTA</h4>'+avs.map(function(e){return '<p><span class="supm">ALTA</span> '+esc(e.texto)+' <small class="hint">'+fFH(e.cuando)+'</small></p>';}).join('')+'</div>':'')+
     '<div class="row-end"><button class="btn primary" data-close type="button">Cerrar</button></div>');
-  $('#modalCard').addEventListener('click',function(e){var tr=e.target.closest('[data-tid]');if(tr){modalTurno(tr.dataset.tid);return;}var b=e.target.closest('[data-inf]');if(b)modalInforme(b.dataset.inf);});
+  $('#modalCard').addEventListener('click',function(e){var bs=e.target.closest('button');if(bs&&bs.dataset.sup!=null){abrirSlotSup(dist,f,+bs.dataset.sup);return;}if(bs&&bs.dataset.pedalta!=null){modalPedirAlta({dist:dist,slots:[slotK(f,+bs.dataset.pedalta)]});return;}if(bs&&bs.dataset.hnew!=null){modalHistTurno(dist,f,+bs.dataset.hnew);return;}
+    var tr=e.target.closest('[data-tid]');if(tr){modalTurno(tr.dataset.tid);return;}var b=e.target.closest('[data-inf]');if(b)modalInforme(b.dataset.inf);});
 }
 
 /* ---------- detalle de un turno ---------- */
@@ -1682,7 +1726,7 @@ function modalTurno(id){
       (r.medDecl!=null?'<dt>Mediodía declarado</dt><dd>'+fmt(r.medDecl)+' L</dd>':'')+
       (r.ajusteDia?'<dt>Corrección del día</dt><dd>'+(r.ajusteDia.litros!=null?(r.ajusteDia.litros>0?'+':'')+fmt(r.ajusteDia.litros)+' L':'A confirmar ('+fmt(r.ajusteDia.propuesto)+' L)')+' · '+esc(r.ajusteDia.motivo||'')+(r.ajusteDia.por?' · '+esc(r.ajusteDia.por.nombre):'')+'</dd>':'')+'<dt>Grupos en marcha</dt><dd>'+esc((r.grupos||[]).join(', ')||'—')+'</dd>'+
       '<dt>Al recibir</dt><dd>'+esc(r.recibe||'—')+'</dd><dt>Observación</dt><dd style="white-space:pre-wrap">'+esc(r.observacion||'—')+'</dd>'+(r.anom?'<dt>Anomalía</dt><dd><span class="chip r">'+esc(r.anom.tipo)+'</span> '+esc(r.anom.desc)+(r.anom.equipo?' (grupo '+esc(r.anom.equipo)+')':'')+'</dd>':'')+
-      (r.hist?'<dt>Origen</dt><dd>Carga histórica · '+esc(r.hist.fuente||'')+(r.hist.cargadoPor?' · cargado por '+esc(r.hist.cargadoPor.nombre)+' el '+fFH(r.hist.cuando):'')+'</dd>':'<dt>Cierre</dt><dd>'+fFH(r.cerrado)+'</dd>')+'<dt>Ubicación al inicio</dt><dd>'+esc(gpsTxt(r.gps&&r.gps.ini,r.dist))+'</dd><dt>Ubicación al cierre</dt><dd>'+esc(gpsTxt(r.gps&&r.gps.fin,r.dist))+'</dd></dl></div>'+
+      (r.porAlta&&r.porAlta.length?'<dt>Con ALTA</dt><dd>'+r.porAlta.map(function(e){return '<span class="supm">ALTA</span> '+esc(e.texto)+' <small class="hint">'+fFH(e.cuando)+'</small>';}).join('<br>')+'</dd>':'')+(r.hist?'<dt>Origen</dt><dd>Carga histórica · '+esc(r.hist.fuente||'')+(r.hist.cargadoPor?' · cargado por '+esc(r.hist.cargadoPor.nombre)+' el '+fFH(r.hist.cuando):'')+'</dd>':'<dt>Cierre</dt><dd>'+fFH(r.cerrado)+'</dd>')+'<dt>Ubicación al inicio</dt><dd>'+esc(gpsTxt(r.gps&&r.gps.ini,r.dist))+'</dd><dt>Ubicación al cierre</dt><dd>'+esc(gpsTxt(r.gps&&r.gps.fin,r.dist))+'</dd></dl></div>'+
     '<div class="block"><h4>Cisternas</h4>'+(conEx?'<div class="tablewrap"><table><thead><tr><th>Cisterna</th><th>Operador (L)</th><th>Telemetría (L)</th><th>Dif. (L)</th></tr></thead><tbody>'+tanks+'</tbody></table></div>':'<p class="hint">Turno histórico sin detalle por cisterna: solo el total ('+fmt(r.total)+' L).</p>')+
       '<h4>Firma</h4>'+(r.firma&&String(r.firma).indexOf('data:')===0?'<img class="firma-img" alt="Firma de '+esc(r.aclaracion)+'" src="'+r.firma+'">':r.firma?'<a href="'+esc(r.firma)+'" target="_blank" rel="noopener">Ver firma en Drive</a>':'<span class="hint">Sin firma</span>')+(r.fotoCaud?'<div>'+fotoLink(r.fotoCaud,'Foto de caudalímetros')+'</div>':'')+'</div></div>'+
     '<div class="block"><h4>Camiones</h4>'+(cams?'<div class="tablewrap"><table><thead><tr><th>Hora</th><th>Remito</th><th>OP / Entrega</th><th>Fecha remito</th><th>Litros</th><th>Cisternas del camión</th><th>Descarga</th><th>Foto</th>'+(puede('redeclarar')?'<th></th>':'')+'</tr></thead><tbody>'+cams+'</tbody></table></div>':'<p class="empty">Sin camiones.</p>')+'</div>'+
@@ -1716,6 +1760,7 @@ function modalPedirCorreccion(id){
     saveTurnos(a);closeModal();toast('Pedido enviado a los superiores del distrito.');sync(false);render();});
 }
 function modalRedeclarar(id,i){
+  var r0=getTurnos().filter(function(x){return x.id===id;})[0];if(r0&&isB()&&!altaPara(r0.dist,r0.fecha,r0.turno)){modalPedirAlta({dist:r0.dist,slots:[slotK(r0.fecha,r0.turno)],texto:'Redeclarar el camión '+(r0.camiones[i]?r0.camiones[i].remito:'')},'Para redeclarar un camión necesitás el ALTA de un categoría A.');return;}
   var r=getTurnos().filter(function(x){return x.id===id;})[0],t=r.camiones[i],cs='';
   for(var k=0;k<NCAM;k++)cs+='<div class="field"><label for="rdC'+k+'">Cisterna '+(k+1)+'</label><input id="rdC'+k+'" class="num" inputmode="decimal" value="'+fmt(t.cisternas[k])+'"></div>';
   openModal('<h3>Redeclarar camión '+esc(t.remito)+'</h3><p class="hint">Salvataje de la declaración: corregí la hora real y los litros descargados según el remito. El cambio queda asentado en el informe de observación y anomalías.</p>'+
@@ -1824,13 +1869,14 @@ function viewInformes(main){
     '<div class="toolbar"><div class="field"><label for="infF">Mostrar</label><select id="infF">'+[['abiertos','Abiertos'],['solicitado','Solicitados'],['pendiente','Pendientes de firma'],['firmado','Firmados'],['todos','Todos']].map(function(o){return '<option value="'+o[0]+'"'+(infFiltro===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></div>'+
     '<div class="field"><label for="resMes">Resumen del mes</label><input id="resMes" type="month" value="'+CMES+'"></div><button class="ghost" type="button" id="btnRes">Ver resumen mensual</button>'+
     (puede('crearInf')?'<button class="btn primary" type="button" id="btnNuevo">Nuevo informe</button>':puede('solicitarInf')?'<button class="btn primary" type="button" id="btnNuevo">Solicitar informe</button>':'')+'</div></div>'+
-    (a.length?'<div class="tablewrap"><table><thead><tr><th>Informe</th><th>Fecha</th><th>Tipo</th><th>Título</th><th>Origen</th><th>Firmas</th><th>Estado</th></tr></thead><tbody>'+a.map(function(x){var f=x.firmas||{};
+    (isA()?altasCardA():'')+(a.length?'<div class="tablewrap"><table><thead><tr><th>Informe</th><th>Fecha</th><th>Tipo</th><th>Título</th><th>Origen</th><th>Firmas</th><th>Estado</th></tr></thead><tbody>'+a.map(function(x){var f=x.firmas||{};
       return '<tr class="click" data-inf="'+esc(x.id)+'"><td>'+esc(informeLabel(x))+'</td><td>'+fFecha(x.fechaHecho||'')+'</td><td>'+esc(x.tipo)+'</td><td class="wrap">'+esc(x.titulo||'')+'</td><td>'+esc({turno:'Cierre de turno',redeclaracion:'Redeclaración',manual:'Manual'}[x.origen]||x.origen)+'</td>'+
       '<td>'+(f.gerente?'<span class="chip g">Gerente</span>':'<span class="chip">Gerente</span>')+' '+(f.jefe?'<span class="chip g">Jefe Div.</span>':'<span class="chip">Jefe Div.</span>')+'</td><td><span class="chip '+({firmado:'g',pendiente:'y',solicitado:'b',anulado:''}[x.estado]||'')+'">'+estadoTxt(x)+'</span></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">No hay informes para mostrar.</p>')+'</div>';
   $('#infF').addEventListener('change',function(e){infFiltro=e.target.value;render();});
   $('#btnRes').addEventListener('click',function(){var m=$('#resMes').value;if(m)modalResumen(SELD,m);});
   if($('#btnNuevo'))$('#btnNuevo').addEventListener('click',function(){modalNuevoInforme({dist:SELD,estado:isA()?'solicitado':'pendiente'});});
   main.addEventListener('click',function(e){var tr=e.target.closest('[data-inf]');if(tr)modalInforme(tr.dataset.inf);});
+  altasBind(main);
 }
 function infFormHTML(x){
   var gs=gruposActivos(x.dist);
@@ -2278,7 +2324,7 @@ function viewHist(main){
       '<div class="row-end"><button class="btn primary" type="button" id="hGo">Abrir turno histórico</button></div></div>':'')+'</div>';
   if($('#hOn'))$('#hOn').addEventListener('click',function(){verificarClave(u,$('#hPw').value).then(function(ok){if(!ok){$('#hMsg').textContent='Contraseña incorrecta.';return;}sset('cpt.histOn',true);toast('Modo histórico activado.');render();}).catch(function(e){$('#hMsg').textContent=e.message;});});
   if($('#hOff'))$('#hOff').addEventListener('click',function(){sset('cpt.histOn',false);histImp=null;toast('Modo histórico desactivado.');render();});
-  if($('#hGo'))$('#hGo').addEventListener('click',function(){var f=$('#hF').value;if(!f){toast('Elegí la fecha.');return;}if(f>=todayISO()){toast('El histórico es para días anteriores a hoy.');return;}modalHistTurno(SELD,f,+$('#hT').value);});
+  if($('#hGo'))$('#hGo').addEventListener('click',function(){var f=$('#hF').value;if(!f){toast('Elegí la fecha.');return;}if(!slotTerminado(f,+$('#hT').value)){toast('Ese turno todavía no terminó: el histórico es para turnos ya terminados.');return;}modalHistTurno(SELD,f,+$('#hT').value);});
   if($('#hFile'))$('#hFile').addEventListener('change',function(e){var fl=e.target.files&&e.target.files[0];if(!fl)return;var rd=new FileReader();rd.onload=function(){try{var o=JSON.parse(rd.result);if(o.tipo!=='control-de-usina-historico'||!Array.isArray(o.turnos))throw new Error('no es un archivo de histórico de Control de Usina');histImp=o;prevImport();}catch(err){$('#hPrev').innerHTML='<p class="chip r">'+esc(err.message)+'</p>';}};rd.readAsText(fl);});
   main.addEventListener('click',function(e){var b=e.target.closest('[data-hmes]');if(b){CMES=b.dataset.hmes;VIEW='control';ctlVista='planilla';render();}});
   if(histImp)prevImport();
@@ -3045,6 +3091,7 @@ function pullPedidos(manual){
   var ds=isA()?usinas().concat(['31']):misDistritos();
   return getJSON({accion:'pedidos',distritos:ds.join(','),desde:addDays(todayISO(),-120)}).then(function(res){if(!Array.isArray(res.pedidos))throw new Error('el servidor no tiene el Code.gs v6 publicado (Implementar → Gestionar implementaciones → Nueva versión)');var q=getQueue();
     var lp=getPedidos(),ip={};lp.forEach(function(x,i){ip[x.id]=i;});(res.pedidos||[]).forEach(function(x){if(q.some(function(y){return y.k==='pedido'&&y.id===x.id;}))return;if(ip[x.id]!=null)lp[ip[x.id]]=x;else lp.push(x);});savePedidos(lp);
+    if(Array.isArray(res.altas)){var la=getAltas(),ia={};la.forEach(function(x,i){ia[x.id]=i;});res.altas.forEach(function(x){if(q.some(function(y){return y.k==='alta'&&y.id===x.id;}))return;if(ia[x.id]!=null)la[ia[x.id]]=x;else la.push(x);});saveAltas(la);}
     var lo=getOPsAll(),io={};lo.forEach(function(x,i){io[x.id]=i;});(res.ops||[]).forEach(function(x){if(q.some(function(y){return y.k==='op'&&y.id===x.id;}))return;if(io[x.id]!=null)lo[io[x.id]]=x;else lo.push(x);});saveOPs(lo);
     if(manual)toast('Pedidos actualizados.');}).catch(function(e){if(manual)toast('No se pudo actualizar: '+e.message);});
 }
@@ -3174,6 +3221,194 @@ function avisoDiferencias(p,despues){var ds=difsPrograma(p);if(!ds.length){if(de
     guardar(p);closeModal();toast('Diferencia justificada.');avisoDiferencias(getPedidos().filter(function(z){return z.id===p.id;})[0],despues||render);});
   $('#dfVolver').addEventListener('click',function(){closeModal();render();var o=x.ops[x.ops.length-1];if(o)modalOP(o.id,{});});
 }
+
+/* =====================================================================
+   ALTAS: permiso que da un categoría A para que un B cargue o corrija
+   turnos puntuales (días y turnos elegidos en una grilla). Vence a las 48 h.
+   ===================================================================== */
+var ALTA_H=48;
+function getAltas(){return sget('cpt.altas',[]);}
+function saveAltas(a){sset('cpt.altas',a);}
+function upsertAlta(x){x.actualizado=new Date().toISOString();var a=getAltas(),i=-1;a.forEach(function(y,j){if(y.id===x.id)i=j;});if(i>=0)a[i]=x;else a.push(x);saveAltas(a);if(!DEMO)queueAdd('alta',x.id,{auth:authNow()});}
+function slotK(f,t){return f+'#'+t;}
+function slotDeK(k){var p=k.split('#');return {fecha:p[0],turno:+p[1]};}
+function slotTerminado(f,t){return slotEnd({fecha:f,turno:t})<=new Date();}
+function altaVigente(x){return x.estado==='activa'&&new Date(x.vence)>new Date();}
+function altaLibres(x){return (x.slots||[]).filter(function(s){return !(x.usados&&x.usados[s]);});}
+function altaPara(dist,f,t){var u=me();if(!u)return null;var k=slotK(f,t);
+  return getAltas().filter(function(x){return x.dist===dist&&String(x.legajoB)===String(u.legajo)&&altaVigente(x)&&x.slots.indexOf(k)>=0&&!(x.usados&&x.usados[k]);})[0]||null;}
+function altasPedidas(){var ds=misDistritos();return getAltas().filter(function(x){return x.estado==='pedida'&&ds.indexOf(x.dist)>=0;});}
+function misAltasActivas(){var u=me();return getAltas().filter(function(x){return String(x.legajoB)===String(u.legajo)&&altaVigente(x)&&altaLibres(x).length;});}
+function misAltasPedidas(){var u=me();return getAltas().filter(function(x){return String(x.legajoB)===String(u.legajo)&&x.estado==='pedida';});}
+var DIAS_C=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function diaCorto(f){var p=f.split('-');return DIAS_C[new Date(+p[0],+p[1]-1,+p[2]).getDay()]+' '+p[2]+'/'+p[1];}
+function slotsTxt(slots){var g={};(slots||[]).slice().sort().forEach(function(k){var s=slotDeK(k);(g[s.fecha]=g[s.fecha]||[]).push(TURNOS[s.turno]);});
+  return Object.keys(g).sort().map(function(f){return diaCorto(f)+': '+(g[f].length===4?'día completo':g[f].join(', '));}).join(' · ');}
+function venceTxt(x){var ms=new Date(x.vence)-new Date();if(ms<=0)return 'vencida';var h=Math.floor(ms/3600000);return 'vence '+fFH(x.vence)+' (faltan '+(h>=1?h+' h':Math.max(1,Math.round(ms/60000))+' min')+')';}
+function estadoAlta(x){if(x.estado==='pedida')return '<span class="chip b">Pedida</span>';if(x.estado==='rechazada')return '<span class="chip r">Rechazada</span>';if(x.estado==='cancelada')return '<span class="chip">Cancelada</span>';
+  if(x.estado==='activa'){if(!altaLibres(x).length)return '<span class="chip g">Usada</span>';return altaVigente(x)?'<span class="chip g">Activa</span>':'<span class="chip">Vencida</span>';}return esc(x.estado);}
+
+/* ---------- grilla tipo calendario para elegir días y turnos ---------- */
+function grillaHTML(G){
+  var map=mapTurnos(getTurnos(G.dist)),ym=G.mes,dd=monthDays(ym),first=(new Date(+ym.slice(0,4),+ym.slice(5,7)-1,1).getDay()+6)%7,h='';
+  ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].forEach(function(d){h+='<div class="dow">'+d+'</div>';});
+  for(var i=0;i<first;i++)h+='<div class="aday out"></div>';
+  for(var d=1;d<=dd;d++){var f=ym+'-'+pad2(d),ss='',algun=false;
+    for(var t=0;t<4;t++){var k=slotK(f,t),ok=slotTerminado(f,t),tiene=!!map[G.dist+'#'+f+'#'+t],on=!!G.sel[k];if(ok)algun=true;
+      ss+='<button type="button" class="aslot'+(tiene?' tiene':'')+'" data-gk="'+k+'" aria-pressed="'+on+'"'+(ok?'':' disabled')+' title="'+esc(TURNOS[t]+(tiene?' · ya tiene datos (se corrige)':' · sin datos (se carga)'))+'"><span class="al">'+['0-6','6-12','12-18','18-24'][t]+'</span><span class="as">'+[0,6,12,18][t]+'h</span></button>';}
+    h+='<div class="aday'+(f===todayISO()?' hoy':'')+'"><button type="button" class="adn" data-gd="'+f+'"'+(algun?'':' disabled')+' title="Tocá el número para marcar o desmarcar el día completo">'+d+'</button><div class="aslots">'+ss+'</div></div>';}
+  var n=Object.keys(G.sel).length;
+  return '<div class="agrid-head"><button class="ghost small" type="button" data-gm="-1" aria-label="Mes anterior">‹</button><b>'+esc(fMes(ym))+'</b><button class="ghost small" type="button" data-gm="1" aria-label="Mes siguiente"'+(ym>=todayISO().slice(0,7)?' disabled':'')+'>›</button></div>'+
+    '<div class="agrid">'+h+'</div><p class="hint agrid-ley"><span class="aslot demo" aria-pressed="true">12-18</span> elegido · <span class="aslot demo tiene">12-18</span> ya tiene datos (se corrige) · <span class="aslot demo">12-18</span> vacío (se carga). Los turnos que todavía no terminaron no se pueden elegir.<span class="as-hint"> En el celular cada casillero muestra la hora en que empieza el turno: 0h, 6h, 12h y 18h.</span></p>'+
+    '<p class="agrid-sel"><b>'+n+' turno'+(n===1?'':'s')+' elegido'+(n===1?'':'s')+'</b>'+(n?': '+esc(slotsTxt(Object.keys(G.sel))):'')+'</p>';
+}
+function grillaBind(box,G){
+  function pintar(){box.innerHTML=grillaHTML(G);}
+  pintar();
+  box.addEventListener('click',function(e){var b=e.target.closest('button');if(!b||b.disabled)return;
+    if(b.dataset.gk){if(G.sel[b.dataset.gk])delete G.sel[b.dataset.gk];else G.sel[b.dataset.gk]=1;pintar();}
+    else if(b.dataset.gd){var f=b.dataset.gd,ks=[0,1,2,3].filter(function(t){return slotTerminado(f,t);}).map(function(t){return slotK(f,t);}),todos=ks.every(function(k){return G.sel[k];});ks.forEach(function(k){if(todos)delete G.sel[k];else G.sel[k]=1;});pintar();}
+    else if(b.dataset.gm){var p=G.mes.split('-'),dt=new Date(+p[0],+p[1]-1+(+b.dataset.gm),1);G.mes=dt.getFullYear()+'-'+pad2(dt.getMonth()+1);pintar();}});
+}
+function selDe(slots){var o={};(slots||[]).forEach(function(k){o[k]=1;});return o;}
+function mesDe(slots){var s=(slots||[]).slice().sort();return s.length?s[0].slice(0,7):todayISO().slice(0,7);}
+
+/* ---------- B: pedir alta ---------- */
+function modalPedirAlta(pre,motivo){
+  pre=pre||{};var u=me(),ds=misDistritos(),dist=pre.dist||SELD,G={dist:dist,mes:mesDe(pre.slots),sel:selDe(pre.slots)};
+  openModal('<h3>Pedir ALTA para cargar o corregir turnos</h3>'+(motivo?'<p class="banner warn">'+esc(motivo)+'</p>':'')+
+    '<p class="hint">Sin el ALTA de un categoría A no se puede cargar ni corregir ningún turno. Marcá en la grilla los días y turnos que necesitás, contá qué vas a hacer y enviá el pedido. Cuando la oficina te dé el ALTA, te aparece en el <b>Calendario</b> y tenés <b>'+ALTA_H+' horas</b> para usarla.</p>'+
+    (ds.length>1?'<div class="field"><label for="paD">Distrito</label><select id="paD">'+ds.map(function(d){return '<option value="'+d+'"'+(d===dist?' selected':'')+'>'+esc(distName(d))+'</option>';}).join('')+'</select></div>':'')+
+    '<div id="paG" class="agridbox"></div>'+
+    '<div class="field"><label for="paT">¿Qué necesitás cargar o corregir?</label><textarea id="paT" rows="3" placeholder="Ejemplo: el domingo 01/11 a la tarde ingresó un camión con remito 1122-00012345 y 37.000 L; el operador no tenía la app para cargarlo.">'+esc(pre.texto||'')+'</textarea></div>'+
+    '<p class="hint" id="paM"></p><div class="row-end"><button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="paGo">Enviar pedido de ALTA</button></div>');
+  var box=$('#paG');grillaBind(box,G);
+  if($('#paD'))$('#paD').addEventListener('change',function(){G.dist=$('#paD').value;G.sel={};box.innerHTML=grillaHTML(G);});
+  $('#paGo').addEventListener('click',function(){var sl=Object.keys(G.sel).sort(),tx=$('#paT').value.trim(),m=$('#paM');
+    if(!sl.length){m.textContent='Marcá al menos un turno en la grilla.';return;}if(!tx){m.textContent='Contá brevemente qué vas a cargar o corregir.';return;}
+    var ahora=new Date().toISOString();
+    upsertAlta({id:uid('AL'),dist:G.dist,distrito:D(G.dist).n,legajoB:u.legajo,nombreB:u.nombre,cargoB:cargoDe(u).abrev,estado:'pedida',slots:sl,texto:tx,pedida:{cuando:ahora},usados:{},historial:[{cuando:ahora,por:u.nombre,txt:'Pedido de ALTA enviado'}],demo:DEMO});
+    closeModal();toast('Pedido de ALTA enviado. Te avisamos en el Calendario cuando te lo den.');render();sync(false);});
+}
+
+/* ---------- A: dar alta (con o sin pedido) ---------- */
+function usuariosB(dist){return getUsers().filter(function(x){return catL(x)==='B'&&x.activo!==false&&(x.dist||[]).indexOf(dist)>=0;});}
+function modalDarAlta(id){
+  var x=id?clone(getAltas().filter(function(y){return y.id===id;})[0]):null,u=me(),ds=misDistritos().filter(function(d){return D(d).cist&&D(d).cist.length;});
+  var dist=x?x.dist:(ds.indexOf(SELD)>=0?SELD:ds[0]),G={dist:dist,mes:mesDe(x&&x.slots),sel:selDe(x&&x.slots)};
+  function opcB(d,sel){var bs=usuariosB(d);return bs.length?bs.map(function(b){return '<option value="'+esc(b.legajo)+'"'+(String(sel)===String(b.legajo)?' selected':'')+'>'+esc(b.nombre+' · '+cargoDe(b).abrev)+'</option>';}).join(''):'<option value="">No hay usuarios B en este distrito</option>';}
+  openModal('<h3>'+(x?'Pedido de ALTA de '+esc(x.nombreB):'Dar ALTA a un categoría B')+'</h3>'+
+    (x?'<div class="block"><dl class="dl"><dt>Distrito</dt><dd>'+esc(distName(x.dist))+'</dd><dt>Pidió</dt><dd>'+esc(x.nombreB)+' · '+esc(x.cargoB||'')+' · '+fFH(x.pedida.cuando)+'</dd><dt>Turnos pedidos</dt><dd>'+esc(slotsTxt(x.slots))+'</dd><dt>Para qué</dt><dd style="white-space:pre-wrap">'+esc(x.texto||'')+'</dd></dl></div>':
+      '<div class="form-grid"><div class="field"><label for="daD">Distrito</label><select id="daD">'+ds.map(function(d){return '<option value="'+d+'"'+(d===dist?' selected':'')+'>'+esc(distName(d))+'</option>';}).join('')+'</select></div>'+
+      '<div class="field"><label for="daB">Usuario B</label><select id="daB">'+opcB(dist)+'</select></div></div>')+
+    '<p class="hint">Ajustá en la grilla qué días y turnos quedan habilitados (podés agregar o sacar). El ALTA dura <b>'+ALTA_H+' horas</b> y cada turno se cierra solo cuando el B lo guarda.</p>'+
+    '<div id="daG" class="agridbox"></div>'+
+    '<div class="field"><label for="daN">Nota para el B (opcional)</label><input id="daN" placeholder="Ejemplo: cargá también el camión del lunes"></div>'+
+    '<div id="daRz" hidden class="field"><label for="daRzT">Motivo del rechazo</label><input id="daRzT"></div>'+
+    '<p class="hint" id="daM"></p><div class="row-end"><button class="btn" data-close type="button">Cancelar</button>'+(x?'<button class="btn" type="button" id="daNo">Rechazar</button>':'')+'<button class="btn primary" type="button" id="daGo">Dar ALTA por '+ALTA_H+' h</button></div>');
+  var box=$('#daG');grillaBind(box,G);
+  if($('#daD'))$('#daD').addEventListener('change',function(){G.dist=$('#daD').value;G.sel={};$('#daB').innerHTML=opcB(G.dist);box.innerHTML=grillaHTML(G);});
+  if($('#daNo'))$('#daNo').addEventListener('click',function(){var rz=$('#daRz');if(rz.hidden){rz.hidden=false;$('#daRzT').focus();$('#daNo').textContent='Confirmar rechazo';return;}
+    var mo=$('#daRzT').value.trim();if(!mo){$('#daM').textContent='Escribí el motivo del rechazo.';return;}var ahora=new Date().toISOString();
+    x.estado='rechazada';x.rechazo={por:{legajo:u.legajo,nombre:u.nombre},cuando:ahora,motivo:mo};x.historial=(x.historial||[]).concat([{cuando:ahora,por:u.nombre,txt:'Rechazado: '+mo}]);
+    upsertAlta(x);closeModal();toast('Pedido de ALTA rechazado.');render();sync(false);});
+  $('#daGo').addEventListener('click',function(){var sl=Object.keys(G.sel).sort(),m=$('#daM');if(!sl.length){m.textContent='Marcá al menos un turno.';return;}
+    var ahora=new Date(),b=null;
+    if(!x){var lg=$('#daB').value;b=usuariosB(G.dist).filter(function(y){return String(y.legajo)===String(lg);})[0];if(!b){m.textContent='Elegí el usuario B.';return;}
+      x={id:uid('AL'),dist:G.dist,distrito:D(G.dist).n,legajoB:b.legajo,nombreB:b.nombre,cargoB:cargoDe(b).abrev,texto:'',usados:{},historial:[],demo:DEMO};}
+    var cambio=x.slots&&x.slots.join()!==sl.join();
+    x.slots=sl;x.estado='activa';x.otorgada={legajo:u.legajo,nombre:u.nombre,cuando:ahora.toISOString()};x.vence=new Date(ahora.getTime()+ALTA_H*3600000).toISOString();x.nota=$('#daN').value.trim();
+    x.historial=(x.historial||[]).concat([{cuando:ahora.toISOString(),por:u.nombre,txt:'ALTA otorgada'+(b?' sin pedido previo':'')+(cambio?' (turnos ajustados)':'')+': '+slotsTxt(sl)}]);
+    upsertAlta(x);closeModal();toast('ALTA otorgada a '+x.nombreB+' por '+ALTA_H+' h.');render();sync(false);});
+}
+function cancelarAlta(id){var x=getAltas().filter(function(y){return y.id===id;})[0];if(!x)return;var u=me(),ahora=new Date().toISOString();
+  x.estado='cancelada';x.historial=(x.historial||[]).concat([{cuando:ahora,por:u.nombre,txt:'ALTA cancelada'}]);upsertAlta(x);toast('ALTA cancelada.');render();sync(false);}
+
+/* ---------- tarjetas ---------- */
+function altasCardA(){
+  var ds=misDistritos(),ped=altasPedidas(),act=getAltas().filter(function(x){return ds.indexOf(x.dist)>=0&&altaVigente(x)&&altaLibres(x).length;});
+  var rec=getAltas().filter(function(x){return ds.indexOf(x.dist)>=0&&x.estado!=='pedida'&&!(altaVigente(x)&&altaLibres(x).length);}).sort(function(a,b){return (a.actualizado||'')<(b.actualizado||'')?1:-1;}).slice(0,6);
+  function fila(x,btn){return '<tr><td>'+estadoAlta(x)+'</td><td><b>'+esc(x.nombreB)+'</b><br><small class="hint">'+esc(x.cargoB||'')+' · '+esc(D(x.dist).n)+'</small></td><td>'+esc(slotsTxt(x.slots))+(x.usados&&Object.keys(x.usados).length?'<br><small class="hint">Usados: '+esc(slotsTxt(Object.keys(x.usados)))+'</small>':'')+'</td><td>'+esc(x.texto||x.nota||'—')+'</td><td>'+(x.estado==='pedida'?fFH(x.pedida.cuando):x.estado==='activa'?esc(venceTxt(x)):x.rechazo?esc(x.rechazo.motivo):'')+'</td><td>'+btn+'</td></tr>';}
+  var cab='<thead><tr><th>Estado</th><th>Usuario B</th><th>Turnos</th><th>Para qué / nota</th><th>Cuándo</th><th></th></tr></thead>';
+  return '<div class="card block altas"><div class="row-end" style="justify-content:space-between;align-items:center"><h4 style="margin:0">ALTAS para cargar o corregir turnos'+(ped.length?' <span class="badge">'+ped.length+'</span>':'')+'</h4><button class="btn sec" type="button" id="altaNueva">+ Dar ALTA a un B</button></div>'+
+    '<p class="hint">Sin ALTA, los categoría B no pueden cargar ni corregir turnos. Cuando un B lo pide aparece acá; también podés darla directamente después de hablarlo por teléfono.</p>'+
+    (ped.length||act.length||rec.length?'<div class="tablewrap"><table>'+cab+'<tbody>'+ped.map(function(x){return fila(x,'<button class="btn primary small" type="button" data-altaver="'+esc(x.id)+'">Revisar</button>');}).join('')+
+      act.map(function(x){return fila(x,'<button class="ghost small" type="button" data-altaver="'+esc(x.id)+'">Modificar</button> <button class="ghost small" type="button" data-altacan="'+esc(x.id)+'">Cancelar</button>');}).join('')+
+      rec.map(function(x){return fila(x,'');}).join('')+'</tbody></table></div>':'<p class="empty">No hay pedidos de ALTA.</p>')+'</div>';
+}
+function altasCardB(){
+  var act=misAltasActivas(),ped=misAltasPedidas(),u=me(),rech=getAltas().filter(function(x){return String(x.legajoB)===String(u.legajo)&&x.estado==='rechazada'&&x.rechazo&&new Date()-new Date(x.rechazo.cuando)<3*86400000;});
+  var h='<div class="card block altas"><div class="row-end" style="justify-content:space-between;align-items:center"><h4 style="margin:0">Mis ALTAS para cargar o corregir turnos</h4><button class="btn sec" type="button" id="altaPedir">Pedir ALTA</button></div>';
+  if(!act.length&&!ped.length&&!rech.length)return h+'<p class="hint">Para cargar o corregir un turno necesitás el ALTA de un categoría A. Tocá <b>Pedir ALTA</b>, marcá los días y turnos y enviá el pedido.</p></div>';
+  act.forEach(function(x){h+='<div class="alta-act"><p><span class="chip g">ALTA activa</span> Otorgada por <b>'+esc(x.otorgada.nombre)+'</b> · '+esc(D(x.dist).n)+' · '+esc(venceTxt(x))+(x.nota?'<br><small>Nota: '+esc(x.nota)+'</small>':'')+'</p><div class="alta-slots">'+
+    altaLibres(x).sort().map(function(k){var s=slotDeK(k),r=mapTurnos(getTurnos(x.dist))[x.dist+'#'+s.fecha+'#'+s.turno];return '<button class="btn '+(r?'':'primary ')+'small" type="button" data-altausar="'+esc(x.dist+'|'+k)+'">'+(r?'Corregir ':'Cargar ')+esc(diaCorto(s.fecha))+' · '+TURNOS[s.turno]+'</button>';}).join('')+'</div></div>';});
+  ped.forEach(function(x){h+='<p><span class="chip b">Esperando ALTA</span> '+esc(D(x.dist).n)+' · '+esc(slotsTxt(x.slots))+' <small class="hint">pedido el '+fFH(x.pedida.cuando)+'</small></p>';});
+  rech.forEach(function(x){h+='<p><span class="chip r">Rechazado</span> '+esc(slotsTxt(x.slots))+' · '+esc(x.rechazo.nombre||x.rechazo.por.nombre)+': '+esc(x.rechazo.motivo)+'</p>';});
+  return h+'</div>';
+}
+function altasBind(main){
+  main.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+    if(b.id==='altaNueva')modalDarAlta(null);else if(b.id==='altaPedir')modalPedirAlta({dist:SELD});
+    else if(b.dataset.altaver)modalDarAlta(b.dataset.altaver);
+    else if(b.dataset.altacan){if(b.dataset.ok)cancelarAlta(b.dataset.altacan);else{b.dataset.ok='1';b.textContent='¿Seguro?';}}
+    else if(b.dataset.altausar){var p=b.dataset.altausar.split('|'),s=slotDeK(p[1]);abrirSlotSup(p[0],s.fecha,s.turno);}});
+}
+
+/* ---------- B: abrir un turno habilitado ---------- */
+function abrirSlotSup(dist,f,t){
+  var al=altaPara(dist,f,t);if(!al){modalPedirAlta({dist:dist,slots:[slotK(f,t)]},'Para cargar o corregir este turno necesitás el ALTA de un categoría A.');return;}
+  var r=mapTurnos(getTurnos(dist))[dist+'#'+f+'#'+t];
+  if(r){if(r.hist){toast('Ese turno es de la carga histórica: lo corrige un categoría A desde el modo histórico.');return;}startEdit(r.id,null,'cal');return;}
+  startCargaSup(dist,f,t,al);
+}
+function draftSupKey(dist,f,t){return 'cpt.draftSup.'+recId(dist,f,t);}
+function startCargaSup(dist,f,t,al){
+  var map=mapTurnos(getTurnos(dist)),pv=prevOf(f,t),pr=map[dist+'#'+pv.fecha+'#'+pv.turno];
+  var d=sget(draftSupKey(dist,f,t),null);
+  if(d&&d.sup&&d.exist&&d.exist.length===D(dist).cist.length){DR=d;DR.sup.alta=al.id;if(pr){DR.slot.inicio=pr.total;DR.sup.inicioLibre=false;}}
+  else{DR=newDraft(dist,{fecha:f,turno:t,inicio:pr?pr.total:null});DR.sup={alta:al.id,inicioLibre:!pr};}
+  editing=null;editSol=null;editBack='cal';page=1;closeModal();VIEW='editor';render();window.scrollTo(0,0);
+  if(!(DR.gps&&DR.gps.ini)){DR.gps=DR.gps||{};getPos().then(function(p){if(!DR||!DR.sup)return;DR.gps.ini=p;persist();var l=$('#gpsLine');if(l)l.textContent='Ubicación: '+gpsTxt(p,DR.dist);});}
+}
+function fueraUsina(g,dist){return !g||!!g.sin||gpsFuera(g,dist);}
+function textoAviso(rec,u,tipo,cambios,al){
+  var q=(cargoDe(u).abrev||u.cat)+' '+u.nombre,t='El '+q+' ingresó al día '+rec.fecha.slice(8)+'/'+rec.fecha.slice(5,7)+' ('+TURNOS[rec.turno]+')';
+  if(tipo==='carga'){var cs=rec.camiones||[];
+    t+=cs.length?' y recibió '+(cs.length>1?'los camiones ':'el camión ')+cs.map(function(c){return 'con remito '+c.remito+' con '+fmt(c.litros)+' L';}).join(' y '):' y cargó el turno sin ingreso de camiones';
+    t+='. Total final '+fmt(rec.total)+' L, consumo '+fmt(rec.consumo)+' L. Declaró: '+(rec.observacion||'sin observaciones')+'.';}
+  else t+=' y corrigió el turno: '+(cambios&&cambios.length?cambios.join('; '):'sin cambios de valores')+'.';
+  if(al&&al.otorgada)t+=' ALTA otorgada por '+al.otorgada.nombre+'.';
+  if(fueraUsina(rec.gps&&(rec.gps.fin||rec.gps.ini),rec.dist))t+=' Cargado fuera de la usina.';
+  return t;
+}
+function marcarAltaUsada(alId,k,recId_){var x=getAltas().filter(function(y){return y.id===alId;})[0];if(!x)return null;x.usados=x.usados||{};x.usados[k]=recId_;
+  x.historial=(x.historial||[]).concat([{cuando:new Date().toISOString(),por:me().nombre,txt:'Usó el turno '+slotsTxt([k])}]);upsertAlta(x);return x;}
+function eventoAlta(al,u,tipo,texto){return {tipo:tipo,legajo:u.legajo,nombre:u.nombre,cargo:cargoDe(u).abrev,cuando:new Date().toISOString(),alta:al?al.id:'',otorgo:al&&al.otorgada?al.otorgada.nombre:'',texto:texto};}
+function doCloseSup(pos){
+  var u=me(),al=getAltas().filter(function(y){return y.id===DR.sup.alta;})[0];
+  if(!al||!altaVigente(al)){closeModal();toast('El ALTA venció o fue cancelada. Pedí una nueva; lo cargado queda guardado en este equipo.');return;}
+  var rec=buildRecord(DR,{});rec.legajo=u.legajo;rec.aclaracion=u.nombre;rec.firma=DR.firma;rec.cerrado=new Date().toISOString();rec.dispositivo=deviceId;rec.ediciones=[];rec.solicitudes=[];
+  rec.gps={ini:DR.gps&&DR.gps.ini||null,fin:pos};rec.demo=DEMO;rec.sync=DEMO?'ejemplo':'pendiente';
+  rec.cargaSup={legajo:u.legajo,nombre:u.nombre,cargo:cargoDe(u).abrev,cuando:rec.cerrado,alta:al.id,otorgo:al.otorgada.nombre,fuera:fueraUsina(pos&&!pos.sin?pos:DR.gps&&DR.gps.ini,DR.dist)};
+  rec.porAlta=[eventoAlta(al,u,'carga',textoAviso(rec,u,'carga',null,al))];
+  var a=getTurnos().filter(function(x){return x.id!==rec.id;});a.push(rec);saveTurnos(a);a=getTurnos();cascade(a,rec.dist);saveTurnos(a);
+  if(!DEMO)queueAdd('turno',rec.id,{auth:authNow()});
+  if(rec.anom){var inf=crearInforme({dist:rec.dist,tipo:rec.anom.tipo,fechaHecho:rec.fecha,turnos:[rec.id],titulo:rec.anom.tipo+' · '+slotLabel(rec),descripcion:rec.anom.desc,equipo:rec.anom.equipo,origen:'turno',estado:'pendiente',agentes:[{legajo:u.legajo,nombre:u.nombre}]});rec.informes=[inf.id];upsertTurno(rec);}
+  marcarAltaUsada(al.id,slotK(rec.fecha,rec.turno),rec.id);
+  sdel(draftSupKey(rec.dist,rec.fecha,rec.turno));closeModal();page=1;
+  CMES=rec.fecha.slice(0,7);DR=null;VIEW='cal';render();toast('Turno '+slotLabel(rec)+' guardado a tu nombre. Los categoría A lo ven marcado en el Calendario.');sync(false);
+}
+function confirmCloseSup(){
+  var c=calcD(DR),u=me(),cur=currentSlot(DR.dist),k=skey(DR.slot),sig=cur&&skey(cur)<=k?nextOf(DR.slot.fecha,DR.slot.turno):null;
+  openModal('<h3>Guardar turno '+esc(slotLabel(DR.slot))+'</h3><div class="summary"><span>Inicio del turno</span><b>'+fmt(DR.slot.inicio,true)+' L</b><span>Ingresos de camiones ('+DR.camiones.filter(tStarted).length+')</span><b>'+fmt(c.ingresos,true)+' L</b>'+
+    '<span>Total final del turno</span><b>'+fmt(c.total,true)+' L</b><span>Consumo del turno</span><b>'+fmt(c.consumo,true)+' L</b><span>Grupos en marcha</span><b>'+esc((DR.grupos||[]).join(', '))+'</b>'+
+    '<span>Cargado por</span><b>'+esc(u.nombre)+' · '+esc(cargoDe(u).abrev)+'</b></div>'+
+    '<p class="hint">El turno queda a tu nombre y marcado en el Calendario como <b>cargado con ALTA</b>, con el aviso para los categoría A. Se registra tu ubicación'+(fueraUsina(DR.gps&&DR.gps.ini,DR.dist)?' (fuera de la usina)':'')+'.</p>'+
+    (sig?'<p class="chip y">Es el turno más reciente del distrito: los operadores van a seguir desde '+esc(slotLabel(sig))+'.</p>':'')+
+    '<div class="row-end"><button class="btn" data-close type="button">Volver</button><button class="btn primary" id="doCloseSup" type="button">Guardar turno</button></div>',true);
+  $('#doCloseSup').addEventListener('click',function(){$('#doCloseSup').setAttribute('aria-disabled','true');$('#doCloseSup').textContent='Registrando ubicación…';getPos().then(doCloseSup);});
+}
+function avisosDia(dist,f){var out=[];[0,1,2,3].forEach(function(t){var r=mapTurnos(getTurnos(dist))[dist+'#'+f+'#'+t];if(r&&r.porAlta)r.porAlta.forEach(function(e){out.push(e);});});return out;}
 
 /* =====================================================================
    CLIMA (Open-Meteo, sin clave) y serie diaria de consumo por distrito
@@ -3447,6 +3682,7 @@ function enviar(item){
     var rs=pd.oficina&&pd.oficina.respaldo,pre=Promise.resolve();
     if(rs&&rs.id&&!rs.url)pre=fotoGet(rs.id).then(function(data){if(!data)return;return postJSON({accion:'guardarFoto',id:rs.id,nombre:pd.id+'_respaldo',data:data}).then(function(res){var a=getPedidos();a.forEach(function(x){if(x.id===pd.id&&x.oficina&&x.oficina.respaldo)x.oficina.respaldo.url=res.url;});savePedidos(a);fotoDel(rs.id);});});
     return pre.then(function(){var pd2=getPedidos().filter(function(x){return x.id===item.id;})[0];return postJSON({accion:'guardarPedido',pedido:pd2,auth:item.auth});});}
+  if(item.k==='alta'){var al=getAltas().filter(function(x){return x.id===item.id;})[0];if(!al||al.demo)return Promise.resolve();return postJSON({accion:'guardarAlta',alta:al,auth:item.auth});}
   if(item.k==='op'){var op=getOPsAll().filter(function(x){return x.id===item.id;})[0];if(!op)return Promise.resolve();return postJSON({accion:'guardarOP',op:op,auth:item.auth});}
   if(item.k==='config'){return postJSON({accion:'guardarConfig',config:{bases:cfg.bases||{},distOv:cfg.distOv,tolL:cfg.tolL,tolP:cfg.tolP,minAut:cfg.minAut,fotoRemito:cfg.fotoRemito,fotoCaud:cfg.fotoCaud,minAntes:cfg.minAntes,horasTarde:cfg.horasTarde},auth:item.auth});}
   return Promise.resolve();
@@ -3495,7 +3731,7 @@ window.addEventListener('offline',updatePill);
 setInterval(function(){if(getQueue().length)sync(false);},120000);
 
 /* ---------- detalle de lo que falta enviar ---------- */
-var TIPOS_Q={turno:'Turno',informe:'Informe',usuario:'Usuario',cf:'Control físico',pedido:'Pedido',op:'Pedido YPF (OP)',config:'Configuración'};
+var TIPOS_Q={alta:'ALTA de carga',turno:'Turno',informe:'Informe',usuario:'Usuario',cf:'Control físico',pedido:'Pedido',op:'Pedido YPF (OP)',config:'Configuración'};
 function nombreItem(x){var t=TIPOS_Q[x.k]||x.k,d='';
   if(x.k==='op'){var o=getOPsAll().filter(function(z){return z.id===x.id;})[0];if(o)d=o.nPedido+' · '+(typeof nomDist==='function'?nomDist(o.dist):o.dist);}
   else if(x.k==='pedido'){var pd=getPedidos().filter(function(z){return z.id===x.id;})[0];if(pd)d=(pd.tipo==='lub'?'lubricante':'programa semanal')+' · '+D(pd.dist).n+' · '+fFecha(pd.fecha);}
