@@ -991,6 +991,12 @@ function me(){if(!ses)return null;return getUsers().filter(function(u){return St
 function isA(){return catL(me())==='A';}
 function histOn(){return isA()&&!!sget('cpt.histOn',false);}
 function isB(){return catL(me())==='B';}
+/* B-1 Gerente Distrital: no carga datos, firma en conformidad. Un A puede designar un subrogante (a/c Gerencia). */
+function esB1(u){u=u===undefined?me():u;return !!u&&u.cat==='B-1';}
+function subrogaActiva(u,dist){var s=u&&u.subroga;if(!s||!s.dist)return false;var h=todayISO();return String(s.dist)===String(dist)&&(!s.desde||s.desde<=h)&&(!s.hasta||h<=s.hasta)&&(u.dist||[]).indexOf(String(s.dist))>=0;}
+function esFirmante(u,dist){if(!u||u.activo===false||catL(u)!=='B')return false;if(esB1(u))return (u.dist||[]).indexOf(dist)>=0;return subrogaActiva(u,dist);}
+function distFirma(u){u=u||me();if(!u)return [];return (u.dist||[]).filter(function(d){return DATA.distritos[d]&&!DATA.distritos[d].central&&esFirmante(u,d);});}
+function cargaDatos(){var u=me();return catL(u)==='B'&&!esB1(u);}
 function isC(){return catL(me())==='C';}
 function misDistritos(){var u=me();if(!u)return [];if(catL(u)==='A')return usinas();return (u.dist||[]).filter(function(d){return DATA.distritos[d]&&!DATA.distritos[d].central;});}
 
@@ -1534,8 +1540,8 @@ var VIEW=null,SELD=null,CMES=todayISO().slice(0,7),ctlVista='turno',infFiltro='a
 
 function puede(acc){var u=me(),c=catL(u);
   switch(acc){case 'usuarios':case 'distritos':case 'config':case 'solicitarInf':return c==='A';
-    case 'editar':case 'redeclarar':case 'atenderSol':case 'firmar':case 'crearInf':return c==='B';
-    case 'telemetria':return c==='A'||c==='B';case 'cerrarTurno':return c==='C';}
+    case 'editar':case 'redeclarar':case 'atenderSol':case 'firmar':case 'crearInf':return c==='B'&&!esB1(u);
+    case 'telemetria':return c==='A'||(c==='B'&&!esB1(u));case 'cerrarTurno':return c==='C';}
   return false;}
 function solicitudesPend(){var ds=misDistritos(),n=[];getTurnos().forEach(function(r){if(ds.indexOf(r.dist)<0)return;(r.solicitudes||[]).forEach(function(s){if(s.estado==='pendiente')n.push({r:r,s:s});});});return n;}
 function informesAbiertos(){var ds=misDistritos();return getInformes().filter(function(i){return ds.indexOf(i.dist)>=0&&i.estado!=='firmado'&&i.estado!=='anulado';});}
@@ -1543,8 +1549,10 @@ function informesAbiertos(){var ds=misDistritos();return getInformes().filter(fu
 function tabsFor(){var u=me(),c=catL(u),t=[];
   if(c==='C'){t.push(['turno','Mi turno']);t.push(['misturnos','Mis turnos']);return t;}
   if(c==='A')t.push(['dash','Dashboard']);
+  if(esB1(u))t.push(['firmar','Para firmar']);
   t.push(['cal','Calendario'],['control','Control'],['fisico','Control físico'],['pedidos','Pedidos'],['informes','Informes']);
-  if(c==='B')t.push(['solic','Pedidos de corrección']);
+  if(c==='B'&&!esB1(u)&&distFirma(u).length)t.push(['firmar','Para firmar']);
+  if(c==='B'&&!esB1(u))t.push(['solic','Pedidos de corrección']);
   if(c==='A')t.push(['hist','Histórico'],['usuarios','Usuarios'],['distritos','Distritos']);
   t.push(['config',c==='A'?'Configuración':'Mi cuenta']);return t;}
 
@@ -1552,12 +1560,12 @@ function renderShell(){
   var u=me(),c=catL(u),tabs=tabsFor(),ds=misDistritos();
   if(!VIEW||!tabs.some(function(t){return t[0]===VIEW;})&&VIEW!=='editor')VIEW=tabs[0][0];
   if(!SELD||ds.indexOf(SELD)<0)SELD=c==='C'?(u.dist||[])[0]:(ds.indexOf(cfg.devDist)>=0?cfg.devDist:ds[0]);
-  var nSol=c==='B'?solicitudesPend().length:0,nInf=informesAbiertos().length+(c==='A'?altasPedidas().length:0),nCal=c==='B'?misAltasActivas().length:0;
+  var nSol=c==='B'?solicitudesPend().length:0,nInf=informesAbiertos().length+(c==='A'?altasPedidas().length:0),nCal=c==='B'?misAltasActivas().length:0,nFir=c==='B'?pendientesFirma().length:0;
   var head='<header class="topbar"><div class="wrap '+(c==='C'||VIEW==='editor'?'':'wide')+'"><div class="brand"><img src="'+LOGO.mark+'" alt="SPSE"><div><b>Control de Usina</b><small>Servicios Públicos S.E.'+(DEMO?' · demostración':'')+'</small></div></div>'+
     '<div class="tb-right"><div class="who"><b>'+esc(u.nombre)+'</b>'+esc(u.legajo+' · '+cargoDe(u).abrev+' · '+u.cat)+'</div><span id="syncPill" class="pill">…</span><button class="ghost small" id="btnSalir" type="button">Salir</button></div></div></header>';
   var nav='';
   if(VIEW!=='editor'){
-    nav='<nav class="tabsbar" aria-label="Secciones"><div class="wrap '+(c==='C'?'':'wide')+'"><div class="navtabs">'+tabs.map(function(t){var b=t[0]==='solic'&&nSol?'<span class="badge">'+nSol+'</span>':t[0]==='informes'&&nInf?'<span class="badge">'+nInf+'</span>':t[0]==='cal'&&nCal?'<span class="badge" title="ALTA activa">'+nCal+'</span>':'';
+    nav='<nav class="tabsbar" aria-label="Secciones"><div class="wrap '+(c==='C'?'':'wide')+'"><div class="navtabs">'+tabs.map(function(t){var b=t[0]==='solic'&&nSol?'<span class="badge">'+nSol+'</span>':t[0]==='informes'&&nInf?'<span class="badge">'+nInf+'</span>':t[0]==='firmar'&&nFir?'<span class="badge">'+nFir+'</span>':t[0]==='cal'&&nCal?'<span class="badge" title="ALTA activa">'+nCal+'</span>':'';
       return '<button class="navtab" type="button" data-view="'+t[0]+'" aria-current="'+(VIEW===t[0]?'page':'false')+'">'+t[1]+b+'</button>';}).join('')+'</div>'+
       (c!=='C'&&ds.length>1?'<label class="distsel">Distrito <select id="selDist">'+ds.map(function(d){return '<option value="'+d+'"'+(d===SELD?' selected':'')+'>'+esc(distName(d))+'</option>';}).join('')+'</select></label>':c!=='C'?'<span class="distsel">'+esc(distName(SELD))+'</span>':'')+
       '</div></nav>';
@@ -1601,6 +1609,7 @@ function renderNow(){
   else if(VIEW==='hist')viewHist(main);
   else if(VIEW==='dash')viewDash(main);
   else if(VIEW==='pedidos')viewPedidos(main);
+  else if(VIEW==='firmar')viewFirmar(main);
   updatePill();
   autoTraer();
 }
@@ -1609,6 +1618,7 @@ function renderNow(){
 var traidos={};
 var pedTraidos=0;
 function autoTraer(){
+  if(VIEW==='firmar'){traerFirmar(false);return;}
   if(VIEW==='pedidos'&&!DEMO&&cfg.syncUrl&&navigator.onLine&&Date.now()-pedTraidos>120000){pedTraidos=Date.now();
     var antes=JSON.stringify([getPedidos(),getOPs()]);var bt=$('#pdSync');if(bt){bt.disabled=true;bt.textContent='Trayendo…';}
     pullPedidos(false).then(function(){if(VIEW!=='pedidos')return;if(JSON.stringify([getPedidos(),getOPs()])!==antes)render();else{var b2=$('#pdSync');if(b2){b2.disabled=false;b2.textContent='Actualizar';}}});
@@ -1694,7 +1704,7 @@ function modalDia(dist,f){
   for(var t=0;t<4;t++){var r=map[dist+'#'+f+'#'+t];
     if(r){var c=controlDe(r,map,all);rows+='<tr class="click '+(c.bad?'row-bad':'')+'" data-tid="'+esc(r.id)+'"><td>'+TURNOS[t]+'</td><td>'+esc(r.aclaracion)+'<br><small class="hint">Legajo '+esc(r.legajo)+'</small></td><td class="n">'+fmt(r.consumo)+'</td><td class="n">'+(r.ingresos?fmt(r.ingresos):'—')+'</td><td>'+esc((r.grupos||[]).join(', ')||'—')+'</td><td class="wrap">'+c.flags.map(function(z){return '<span class="chip '+z.c+'">'+esc(z.t)+'</span>';}).join(' ')+'</td></tr>';}
     else{var enC=cur&&cur.fecha===f&&cur.turno===t&&!slotTerminado(f,t),acc='';
-      if(!enC&&slotTerminado(f,t)){if(isB())acc=altaPara(dist,f,t)?' <button class="btn primary small" type="button" data-sup="'+t+'">Cargar este turno</button>':' <button class="ghost small" type="button" data-pedalta="'+t+'">Pedir ALTA para cargarlo</button>';
+      if(!enC&&slotTerminado(f,t)){if(isB())acc=altaPara(dist,f,t)?' <button class="btn primary small" type="button" data-sup="'+t+'">Cargar este turno</button>':esB1()?'':' <button class="ghost small" type="button" data-pedalta="'+t+'">Pedir ALTA para cargarlo</button>';
         else if(histOn())acc=' <button class="ghost small" type="button" data-hnew="'+t+'">Cargar (Robot-Histórico)</button>';}
       rows+='<tr><td>'+TURNOS[t]+'</td><td colspan="5" class="hint">'+(enC?'Turno en curso':slotTerminado(f,t)?'Sin cerrar':'Todavía no terminó')+acc+'</td></tr>';}}
   var infs=getInformes(dist).filter(function(x){return x.fechaHecho===f;}),avs=avisosDia(dist,f);
@@ -1733,7 +1743,7 @@ function modalTurno(id){
     (sols?'<div class="block"><h4>Pedidos de corrección</h4><ul>'+sols+'</ul></div>':'')+(eds?'<div class="block"><h4>Correcciones registradas</h4><ul>'+eds+'</ul></div>':'')+
     (infs.length?'<div class="block"><h4>Informes</h4>'+infs.map(function(x){return '<button class="linkbtn" type="button" data-inf="'+esc(x.id)+'">'+esc(informeLabel(x)+' · '+x.tipo+' · '+estadoTxt(x))+'</button>';}).join('<br>')+'</div>':'')+
     '<div class="row-end">'+(isA()&&r.hist?'<button class="ghost" type="button" id="dtHist">Corregir histórico</button>':'')+(puede('telemetria')&&ti.length&&conEx?'<button class="ghost" type="button" id="dtTel">'+(c.tieneTel?'Ver telemetría':'Cargar telemetría')+'</button>':'')+
-      (puede('editar')&&!r.hist?'<button class="ghost" type="button" id="dtEdit">Corregir turno</button>':'')+(puede('crearInf')?'<button class="ghost" type="button" id="dtInf">Crear informe</button>':'')+
+      ((puede('editar')||(isB()&&altaPara(r.dist,r.fecha,r.turno)))&&!r.hist?'<button class="ghost" type="button" id="dtEdit">Corregir turno</button>':'')+(puede('crearInf')?'<button class="ghost" type="button" id="dtInf">Crear informe</button>':'')+
       (puede('solicitarInf')?'<button class="ghost" type="button" id="dtSolInf">Solicitar informe</button>':'')+(isC()&&r.legajo===u.legajo?'<button class="ghost" type="button" id="dtPedir">Pedir corrección</button>':'')+
       '<button class="btn primary" data-close type="button">Cerrar</button></div>');
   var card=$('#modalCard');
@@ -1859,7 +1869,7 @@ function viewSolic(main){
    INFORME DE OBSERVACIÓN Y ANOMALÍAS EN USINA  y resumen mensual
    ===================================================================== */
 function firmantes(dist){var us=getUsers().filter(function(u){return u.activo!==false&&(u.dist||[]).indexOf(dist)>=0;});
-  return {gerente:us.filter(function(u){return u.cat==='B-1';})[0]||null,jefe:us.filter(function(u){return u.cat==='B-2';})[0]||null};}
+  return {gerente:us.filter(function(u){return subrogaActiva(u,dist);})[0]||us.filter(function(u){return u.cat==='B-1';})[0]||null,jefe:us.filter(function(u){return u.cat==='B-2';})[0]||null};}
 function rolFirma(u,dist){if(!u||(u.dist||[]).indexOf(dist)<0)return null;if(u.cat==='B-1')return 'gerente';if(u.cat==='B-2')return 'jefe';return null;}
 function estadoAuto(inf){if(inf.estado==='anulado')return 'anulado';var f=inf.firmas||{};if(f.gerente&&f.jefe)return 'firmado';if(inf.estado==='solicitado'&&!(inf.descripcion||'').trim())return 'solicitado';return 'pendiente';}
 
@@ -1871,7 +1881,7 @@ function viewInformes(main){
     (puede('crearInf')?'<button class="btn primary" type="button" id="btnNuevo">Nuevo informe</button>':puede('solicitarInf')?'<button class="btn primary" type="button" id="btnNuevo">Solicitar informe</button>':'')+'</div></div>'+
     (isA()?altasCardA():'')+(a.length?'<div class="tablewrap"><table><thead><tr><th>Informe</th><th>Fecha</th><th>Tipo</th><th>Título</th><th>Origen</th><th>Firmas</th><th>Estado</th></tr></thead><tbody>'+a.map(function(x){var f=x.firmas||{};
       return '<tr class="click" data-inf="'+esc(x.id)+'"><td>'+esc(informeLabel(x))+'</td><td>'+fFecha(x.fechaHecho||'')+'</td><td>'+esc(x.tipo)+'</td><td class="wrap">'+esc(x.titulo||'')+'</td><td>'+esc({turno:'Cierre de turno',redeclaracion:'Redeclaración',manual:'Manual'}[x.origen]||x.origen)+'</td>'+
-      '<td>'+(f.gerente?'<span class="chip g">Gerente</span>':'<span class="chip">Gerente</span>')+' '+(f.jefe?'<span class="chip g">Jefe Div.</span>':'<span class="chip">Jefe Div.</span>')+'</td><td><span class="chip '+({firmado:'g',pendiente:'y',solicitado:'b',anulado:''}[x.estado]||'')+'">'+estadoTxt(x)+'</span></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">No hay informes para mostrar.</p>')+'</div>';
+      '<td>'+(x.devuelto&&!f.gerente?'<span class="chip r">Devuelto por el Gerente</span>':f.gerente?'<span class="chip g">Gerente</span>':'<span class="chip">Gerente</span>')+' '+(f.jefe?'<span class="chip g">Jefe Div.</span>':'<span class="chip">Jefe Div.</span>')+'</td><td><span class="chip '+({firmado:'g',pendiente:'y',solicitado:'b',anulado:''}[x.estado]||'')+'">'+estadoTxt(x)+'</span></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">No hay informes para mostrar.</p>')+'</div>';
   $('#infF').addEventListener('change',function(e){infFiltro=e.target.value;render();});
   $('#btnRes').addEventListener('click',function(){var m=$('#resMes').value;if(m)modalResumen(SELD,m);});
   if($('#btnNuevo'))$('#btnNuevo').addEventListener('click',function(){modalNuevoInforme({dist:SELD,estado:isA()?'solicitado':'pendiente'});});
@@ -1901,12 +1911,13 @@ function modalNuevoInforme(o){
 function modalInforme(id){
   var x=getInformes().filter(function(i){return i.id===id;})[0];if(!x)return;
   if(x.tipo==='Resumen mensual'){modalResumen(x.dist,x.mes);return;}
-  var u=me(),rol=rolFirma(u,x.dist),editable=(isB()&&(u.dist||[]).indexOf(x.dist)>=0&&x.estado!=='firmado'&&x.estado!=='anulado'),fs=firmantes(x.dist),f=x.firmas||{};
+  var u=me(),rol=rolFirma(u,x.dist),editable=(cargaDatos()&&(u.dist||[]).indexOf(x.dist)>=0&&x.estado!=='firmado'&&x.estado!=='anulado'),fs=firmantes(x.dist),f=x.firmas||{};
   var turnos=getTurnos().filter(function(r){return (x.turnos||[]).indexOf(r.id)>=0;});
   function slot(k,tit,persona){var s=f[k];
     return '<div class="fslot"><b>'+tit+'</b>'+(s?'<img class="firma-img" alt="Firma de '+esc(s.nombre)+'" src="'+esc(s.firma)+'"><div class="cap">'+esc(s.nombre)+' · legajo '+esc(s.legajo)+'<br>'+fFH(s.cuando)+'</div>':
-      (rol===k&&editable?'<canvas class="pad" id="pad_'+k+'"></canvas><div class="row-end"><button class="ghost small" type="button" id="clr_'+k+'">Borrar</button><button class="btn primary small" type="button" id="sig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):' · sin asignar en el distrito')+'</p>'))+'</div>';}
-  openModal('<div class="noprint ctl-sum"><span class="chip '+({firmado:'g',pendiente:'y',solicitado:'b'}[x.estado]||'')+'">'+estadoTxt(x)+'</span>'+(x.demo?'<span class="chip">Demostración</span>':'')+'</div>'+
+      (k==='gerente'?(esFirmante(u,x.dist)&&x.estado!=='anulado'?'<button class="btn primary small" type="button" data-conf="inf|'+esc(x.id)+'">Firmar en conformidad</button> <button class="ghost small" type="button" data-devol="inf|'+esc(x.id)+'">Devolver con observación</button>':'<p class="hint">Pendiente de conformidad'+(persona?' · '+esc(persona.nombre):' · sin gerente asignado')+'</p>'):
+      rol===k&&editable?'<canvas class="pad" id="pad_'+k+'"></canvas><div class="row-end"><button class="ghost small" type="button" id="clr_'+k+'">Borrar</button><button class="btn primary small" type="button" id="sig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):' · sin asignar en el distrito')+'</p>'))+'</div>';}
+  openModal('<div class="noprint ctl-sum"><span class="chip '+({firmado:'g',pendiente:'y',solicitado:'b'}[x.estado]||'')+'">'+estadoTxt(x)+'</span>'+confChip(x.firmas&&x.firmas.gerente,x.devuelto)+(x.demo?'<span class="chip">Demostración</span>':'')+'</div>'+devueltoHTML(x.devuelto)+
     '<div style="display:flex;gap:14px;align-items:center"><img src="'+LOGO.sp+'" alt="SPSE" style="width:17mm;height:12.75mm;object-fit:fill"><div><h3>Informe de observación y anomalías en usina</h3><p class="hint">'+esc(informeLabel(x))+' · '+esc(distName(x.dist))+' · creado '+fFH(x.creado)+(x.creadoPor?' por '+esc(x.creadoPor.nombre):'')+'</p></div></div>'+
     (editable?infFormHTML(x):'<dl class="dl"><dt>Tipo</dt><dd>'+esc(x.tipo)+'</dd><dt>Fecha del hecho</dt><dd>'+fFecha(x.fechaHecho)+'</dd><dt>Título</dt><dd>'+esc(x.titulo)+'</dd><dt>Equipo afectado</dt><dd>'+esc(x.equipo?'Grupo '+x.equipo:'—')+'</dd>'+
       '<dt>Descripción</dt><dd style="white-space:pre-wrap">'+esc(x.descripcion||'—')+'</dd><dt>Acción tomada</dt><dd>'+esc(x.accion||'—')+'</dd><dt>Estado en que queda</dt><dd>'+esc(x.estadoEquipo||'—')+'</dd></dl>')+
@@ -1920,7 +1931,8 @@ function modalInforme(id){
     $('#sig_'+k).addEventListener('click',function(){if(!firmasTmp[k]){toast('Firmá en el recuadro.');return;}if(editable)readInfForm(x);if(!String(x.descripcion||'').trim()){toast('Completá la descripción del informe antes de firmar.');return;}
       x.firmas=x.firmas||{};x.firmas[k]={legajo:u.legajo,nombre:u.nombre,cat:u.cat,firma:firmasTmp[k],cuando:new Date().toISOString()};
       x.historial=(x.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Firmado como '+(k==='gerente'?'Gerente de Distrito':'Jefe de División')}]);x.estado=estadoAuto(x);upsertInforme(x);sync(false);toast('Informe firmado.');modalInforme(x.id);});});
-  if($('#ifSave'))$('#ifSave').addEventListener('click',function(){readInfForm(x);x.historial=(x.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Informe completado o modificado'}]);if(x.estado==='solicitado'&&x.descripcion)x.estado='pendiente';upsertInforme(x);sync(false);toast('Informe guardado.');modalInforme(x.id);});
+  if($('#ifSave'))$('#ifSave').addEventListener('click',function(){readInfForm(x);x.historial=(x.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Informe completado o modificado'+(x.devuelto?' (corrección de lo observado por el Gerente)':'')}]);delete x.devuelto;
+    if(x.firmas&&x.firmas.gerente){delete x.firmas.gerente;x.historial.push({cuando:new Date().toISOString(),por:'Sistema',txt:'Se quitó la conformidad del Gerente porque se modificó el informe'});}if(x.estado==='solicitado'&&x.descripcion)x.estado='pendiente';upsertInforme(x);sync(false);toast('Informe guardado.');modalInforme(x.id);});
   if($('#ifPrint'))$('#ifPrint').addEventListener('click',function(){imprimirModal();});
   card.addEventListener('click',function(e){var b=e.target.closest('[data-tid]');if(b)modalTurno(b.dataset.tid);});
 }
@@ -1932,14 +1944,15 @@ function modalResumen(dist,mes){
   var dd=monthDays(mes),esperados=dd*4,u=me(),rol=rolFirma(u,dist),fs=firmantes(dist),f=res&&res.firmas||{};
   var redecl=ts.filter(function(r){return (r.ediciones||[]).some(function(e){return /Redeclaración|Camión/.test(e.cambios.join(' '));});});
   function slot(k,tit,persona){var s=f[k];return '<div class="fslot"><b>'+tit+'</b>'+(s?'<img class="firma-img" alt="Firma de '+esc(s.nombre)+'" src="'+esc(s.firma)+'"><div class="cap">'+esc(s.nombre)+' · '+fFH(s.cuando)+'</div>':
-    (rol===k?'<canvas class="pad" id="rpad_'+k+'"></canvas><div class="row-end"><button class="btn primary small" type="button" id="rsig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):'')+'</p>'))+'</div>';}
-  openModal('<div class="memb"><img src="'+LOGO.sp+'" alt="SPSE" style="width:17mm;height:12.75mm;object-fit:fill"><div class="dr"><b>Distrito '+esc(distName(dist))+'</b><br>'+esc(fMes(mes))+'</div></div><h3 class="tc">Resumen mensual · Informe de observación y anomalías</h3>'+
+    (k==='gerente'?(esFirmante(u,dist)?'<button class="btn primary small" type="button" data-conf="res|'+esc(dist)+'|'+esc(mes)+'">Firmar en conformidad</button> <button class="ghost small" type="button" data-devol="res|'+esc(dist)+'|'+esc(mes)+'">Devolver con observación</button>':'<p class="hint">Pendiente de conformidad'+(persona?' · '+esc(persona.nombre):'')+'</p>'):
+    rol===k?'<canvas class="pad" id="rpad_'+k+'"></canvas><div class="row-end"><button class="btn primary small" type="button" id="rsig_'+k+'">Firmar como '+tit+'</button></div>':'<p class="hint">Pendiente'+(persona?' · '+esc(persona.nombre):'')+'</p>'))+'</div>';}
+  openModal((res?devueltoHTML(res.devuelto):'')+'<div class="memb"><img src="'+LOGO.sp+'" alt="SPSE" style="width:17mm;height:12.75mm;object-fit:fill"><div class="dr"><b>Distrito '+esc(distName(dist))+'</b><br>'+esc(fMes(mes))+'</div></div><h3 class="tc">Resumen mensual · Informe de observación y anomalías</h3>'+
     '<div class="stats"><div class="stat"><span>Turnos cerrados</span><b>'+ts.length+' / '+esperados+'</b></div><div class="stat"><span>Consumo</span><b>'+fmt(sum(ts.map(function(r){return r.consumo;})))+' L</b></div><div class="stat"><span>Ingresos</span><b>'+fmt(sum(ts.map(function(r){return r.ingresos;})))+' L</b></div>'+
     '<div class="stat"><span>Fuera de tolerancia</span><b>'+ctl.filter(function(x){return x.c.bad;}).length+'</b></div><div class="stat"><span>Anomalías e informes</span><b>'+infs.length+'</b></div><div class="stat"><span>Camiones</span><b>'+cams.length+'</b></div></div>'+
     '<div class="block"><h4>Informes del mes</h4>'+(infs.length?'<div class="tablewrap"><table><thead><tr><th>Informe</th><th>Fecha</th><th>Tipo</th><th>Título</th><th>Estado</th></tr></thead><tbody>'+infs.map(function(x){return '<tr class="click" data-inf="'+esc(x.id)+'"><td>'+esc(informeLabel(x))+'</td><td>'+fFecha(x.fechaHecho)+'</td><td>'+esc(x.tipo)+'</td><td class="wrap">'+esc(x.titulo)+'</td><td>'+estadoTxt(x)+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">Sin informes en el mes.</p>')+'</div>'+
     '<div class="block"><h4>Turnos con observaciones o fuera de tolerancia</h4>'+(function(){var l=ctl.filter(function(x){return x.c.bad||x.r.anom||(x.r.observacion||'').trim();});return l.length?'<div class="tablewrap"><table><thead><tr><th>Turno</th><th>Operador</th><th class="n">Consumo</th><th>Qué pasó y qué revisar</th></tr></thead><tbody>'+l.map(function(x){return '<tr class="click '+(x.c.bad?'row-bad':'')+'" data-tid="'+esc(x.r.id)+'"><td>'+esc(slotLabel(x.r))+'</td><td>'+esc(x.r.aclaracion)+'</td><td class="n">'+fmt(x.r.consumo)+'</td><td class="wrap">'+esc(x.r.observacion||'')+' '+x.c.flags.filter(function(z){return z.c==='r';}).map(function(z){return '<span class="chip r">'+esc(z.t)+'</span>';}).join(' ')+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">Ninguno.</p>';})()+'</div>'+
     '<div class="block"><h4>Camiones del mes</h4>'+(cams.length?'<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Remito</th><th>Cisternas (Litros)</th><th class="n">Litros descargados</th><th>Descarga</th></tr></thead><tbody>'+cams.map(function(x){return '<tr><td>'+fFecha(x.r.fecha)+'</td><td>'+esc(x.c.hora)+'</td><td>'+esc(x.c.remito)+'</td><td>'+cistCeldas(x.c)+'</td><td class="n"><b>'+fmt(litrosDesc(x.c))+'</b></td><td>'+(x.c.parcial?'Parcial: '+esc(x.c.motivo):'Completa')+'</td></tr>';}).join('')+'</tbody></table></div>'+
-      (function(){var au=obsCamAuto(dist,mes,cams),ex=(res&&res.obsCam||[]).join('\n'),ed=isA()||isB();return '<div class="obsc"><b>Observaciones</b>'+(au.length?'<ul class="lst">'+au.map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul>':'<p class="hint">La app agrega sola las cisternas rechazadas, las derivadas y los camiones sin pedido de la oficina.</p>')+
+      (function(){var au=obsCamAuto(dist,mes,cams),ex=(res&&res.obsCam||[]).join('\n'),ed=isA()||cargaDatos();return '<div class="obsc"><b>Observaciones</b>'+(au.length?'<ul class="lst">'+au.map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul>':'<p class="hint">La app agrega sola las cisternas rechazadas, las derivadas y los camiones sin pedido de la oficina.</p>')+
         '<label for="rsObs" class="hint">Otras observaciones (una por renglón)</label><textarea id="rsObs" rows="3"'+(ed?'':' disabled')+' placeholder="Ejemplo: Se recibió un camión derivado con remito 1116-00088899 por emergencia de YPF">'+esc(ex)+'</textarea>'+(ed?'<div class="row-end"><button class="btn small" type="button" id="rsObsG">Guardar observaciones</button></div>':'')+'</div>';})():'<p class="empty">Sin camiones.</p>')+
     (redecl.length?'<p class="hint">'+redecl.length+' turno(s) con camiones redeclarados por los superiores.</p>':'')+'</div>'+
     '<div class="block"><h4>Firmas del cierre de mes</h4><div class="firmas">'+slot('gerente','Gerente de Distrito',fs.gerente)+slot('jefe','Jefe de División',fs.jefe)+'</div></div>'+
@@ -1952,7 +1965,8 @@ function modalResumen(dist,mes){
       r.totales={turnos:ts.length,consumo:sum(ts.map(function(t){return t.consumo;})),ingresos:sum(ts.map(function(t){return t.ingresos;})),informes:infs.map(function(i){return i.id;})};r.estado=estadoAuto(r);
       upsertInforme(r);sync(false);toast('Resumen mensual firmado.');modalResumen(dist,mes);});});
   if($('#rsObsG'))$('#rsObsG').addEventListener('click',function(){var r=res||{id:rid,dist:dist,distrito:D(dist).n,tipo:'Resumen mensual',mes:mes,anio:mes.slice(0,4),num:0,creado:new Date().toISOString(),fechaHecho:mes+'-'+pad2(dd),titulo:'Resumen mensual '+fMes(mes),firmas:{},historial:[],estado:'pendiente',origen:'manual',demo:DEMO};
-    r.obsCam=$('#rsObs').value.split('\n').map(function(t){return t.trim();}).filter(Boolean);r.historial=(r.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Editó las observaciones de camiones'}]);r.estado=estadoAuto(r);upsertInforme(r);sync(false);toast('Observaciones guardadas.');modalResumen(dist,mes);});
+    r.obsCam=$('#rsObs').value.split('\n').map(function(t){return t.trim();}).filter(Boolean);r.historial=(r.historial||[]).concat([{cuando:new Date().toISOString(),por:u.nombre,txt:'Editó las observaciones de camiones'}]);delete r.devuelto;
+    if(r.firmas&&r.firmas.gerente){delete r.firmas.gerente;r.historial.push({cuando:new Date().toISOString(),por:'Sistema',txt:'Se quitó la conformidad del Gerente porque se modificaron las observaciones'});}r.estado=estadoAuto(r);upsertInforme(r);sync(false);toast('Observaciones guardadas.');modalResumen(dist,mes);});
   if($('#rsPrint'))$('#rsPrint').addEventListener('click',function(){verDoc('Resumen mensual · '+D(dist).n+' · '+fMes(mes),pdfResumen(dist,mes),'Resumen mensual '+D(dist).n+' '+fMes(mes));});
   $('#modalCard').addEventListener('click',function(e){var b=e.target.closest('[data-inf]');if(b){modalInforme(b.dataset.inf);return;}var t=e.target.closest('[data-tid]');if(t)modalTurno(t.dataset.tid);});
 }
@@ -2027,7 +2041,7 @@ function viewUsuarios(main){
     '<div class="toolbar"><div class="field"><label for="usrQ">Buscar</label><input id="usrQ" value="'+esc(usrFiltro)+'" placeholder="Nombre, legajo, distrito o categoría"></div><button class="btn primary" type="button" id="usrNew">Alta de agente</button></div></div>'+
     '<div class="tablewrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Cargo</th><th>Cat.</th><th>Distritos</th><th>Clave</th><th>Estado</th><th></th></tr></thead><tbody>'+f.map(function(u){var c=catL(u);
       return '<tr><td><b>'+esc(u.legajo?userStr(u):'(sin legajo)')+'</b></td><td>'+esc(u.nombre)+'</td><td>'+esc(cargoDe(u).cargo)+'</td><td>'+esc(u.cat)+'</td><td>'+esc((u.dist||[]).join(', '))+'</td>'+
-      '<td>'+(c==='C'?'<span class="hint">No usa</span>':(u.h||u.demo)?'<span class="chip g">Asignada</span>':'<span class="chip r">Falta</span>')+'</td><td>'+(u.activo===false?'<span class="chip">Baja '+esc(u.baja||'')+'</span>':u.legajo?'<span class="chip g">Activo</span>':'<span class="chip y">Falta legajo</span>')+'</td>'+
+      '<td>'+(c==='C'?'<span class="hint">No usa</span>':(u.h||u.demo)?'<span class="chip g">Asignada</span>':'<span class="chip r">Falta</span>')+'</td><td>'+(u.subroga&&u.subroga.hasta>=todayISO()?'<span class="chip b" title="'+esc(distName(u.subroga.dist)+' · '+fFecha(u.subroga.desde)+' al '+fFecha(u.subroga.hasta))+'">a/c Gerencia hasta '+fFecha(u.subroga.hasta).slice(0,5)+'</span> ':'')+(u.activo===false?'<span class="chip">Baja '+esc(u.baja||'')+'</span>':u.legajo?'<span class="chip g">Activo</span>':'<span class="chip y">Falta legajo</span>')+'</td>'+
       '<td><button class="ghost small" type="button" data-u="'+esc(u.legajo||'')+'|'+esc(u.nombre)+'">Editar</button></td></tr>';}).join('')+(!q||'robot histórico 0000 d-1'.indexOf(q)>=0||q.indexOf('robot')>=0?'<tr class="robot"><td><b>'+esc(userStr(ROBOT))+'</b></td><td>'+esc(ROBOT.nombre)+'</td><td>'+esc(cargo('D-1').cargo)+'</td><td>D-1</td><td>Todos</td><td><span class="hint">Lo activa un A</span></td><td><span class="chip b">Sistema</span></td><td><button class="ghost small" type="button" data-view="hist">Histórico</button></td></tr>':'')+'</tbody></table></div><p class="hint">'+f.length+' de '+a.length+' agentes. Robot-Histórico no ingresa solo: lo activa un usuario A en la pestaña Histórico. Los que figuran «Falta legajo» no pueden ingresar hasta que se cargue su legajo.</p></div>';
   $('#usrQ').addEventListener('input',function(e){usrFiltro=e.target.value;var p=e.target.selectionStart;render();var n=$('#usrQ');n.focus();n.setSelectionRange(p,p);});
   $('#usrNew').addEventListener('click',function(){modalUsuario(null);});
@@ -2041,13 +2055,15 @@ function modalUsuario(u){
     '<div class="field"><label for="uIni">Iniciales</label><input id="uIni" value="'+esc(u.iniciales||'')+'" placeholder="Se completan solas"></div>'+
     '<div class="field"><label for="uCat">Cargo</label><select id="uCat">'+DATA.jer.filter(function(j){return j.cat.charAt(0)!=='D';}).map(function(j){return '<option value="'+j.cat+'"'+(u.cat===j.cat?' selected':'')+'>'+j.cat+' · '+esc(j.cargo)+'</option>';}).join('')+'</select></div>'+
     '<div class="field full"><label>Distritos</label><div class="checks">'+ds.map(function(d){return '<label class="check"><input type="checkbox" name="uDist" value="'+d+'"'+((u.dist||[]).indexOf(d)>=0?' checked':'')+'> '+esc(distName(d))+'</label>';}).join('')+'</div></div>'+
+    '<div class="field full" id="uSubBox"><label>Gerente a cargo (subrogancia)</label><div class="form-grid"><div class="field"><label for="uSubD">Distrito</label><select id="uSubD"><option value="">No está a cargo</option>'+ds.map(function(d){return '<option value="'+d+'"'+(u.subroga&&String(u.subroga.dist)===d?' selected':'')+'>'+esc(distName(d))+'</option>';}).join('')+'</select></div>'+
+      '<div class="field"><label for="uSubI">Desde</label><input id="uSubI" type="date" value="'+esc(u.subroga&&u.subroga.desde||todayISO())+'"></div><div class="field"><label for="uSubH">Hasta</label><input id="uSubH" type="date" value="'+esc(u.subroga&&u.subroga.hasta||'')+'"></div></div><small class="hint">Mientras dure, firma en conformidad como «a/c Gerencia Distrital» los documentos de ese distrito. Al vencer vuelve solo a sus funciones.</small></div>'+
     '<div class="field full" id="uClaveBox"><label for="uClave" id="uClaveLbl">Contraseña</label><input id="uClave" type="password" autocomplete="new-password" placeholder="'+(nuevo?'':'Dejar vacío para no cambiarla')+'"></div>'+
     '<div class="field full"><label>Usuario para ingresar</label><b id="uPrev"></b></div></div><p class="hint" id="uMsg"></p>'+
     '<div class="row-end">'+(!nuevo&&u.activo!==false?'<button class="btn goto" type="button" id="uBaja">Dar de baja</button>':'')+(!nuevo&&u.activo===false?'<button class="btn" type="button" id="uAlta">Reactivar</button>':'')+
     '<button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="uSave">Guardar</button></div>',true);
   function ini(n){return n.split(/\s+/).filter(Boolean).map(function(w){return w.charAt(0);}).join('').toLowerCase().normalize('NFD').replace(/[^a-z]/g,'').slice(0,4);}
   function upd(){var c=$('#uCat').value.charAt(0),n=$('#uNom').value;if(!$('#uIni').dataset.touched)$('#uIni').value=ini(n);
-    $('#uClaveBox').hidden=c==='C';$('#uClaveLbl').textContent=c==='A'?'Contraseña (mínimo 8 caracteres)':'PIN (4 dígitos)';$('#uClave').inputMode=c==='B'?'numeric':'text';
+    $('#uClaveBox').hidden=c==='C';$('#uSubBox').hidden=c!=='B'||$('#uCat').value==='B-1';$('#uClaveLbl').textContent=c==='A'?'Contraseña (mínimo 8 caracteres)':'PIN (4 dígitos)';$('#uClave').inputMode=c==='B'?'numeric':'text';
     $('#uPrev').textContent=[$('#uLeg').value||'?',$('#uIni').value,cargo($('#uCat').value).abrev].join('-');}
   $('#uIni').addEventListener('input',function(){$('#uIni').dataset.touched='1';});$('#modalCard').addEventListener('input',upd);$('#modalCard').addEventListener('change',upd);upd();
   $('#uSave').addEventListener('click',function(){var m=$('#uMsg'),leg=$('#uLeg').value.replace(/\D/g,''),nom=$('#uNom').value.trim(),cat=$('#uCat').value,c=cat.charAt(0),cl=$('#uClave').value,dd=$$('input[name=uDist]:checked').map(function(x){return x.value;});
@@ -2058,7 +2074,8 @@ function modalUsuario(u){
     if(c==='B'&&cl&&!/^\d{4}$/.test(cl)){m.textContent='El PIN tiene que ser de 4 dígitos.';return;}
     if((c==='A'||c==='B')&&nuevo&&!cl&&!DEMO){m.textContent='Asigná '+(c==='A'?'una contraseña':'un PIN')+'.';return;}
     if(!orig&&!nuevo){var a=getUsers().filter(function(x){return !(x.nombre===origNombre&&!x.legajo);});saveUsers(a);}
-    u.legajo=leg;u.nombre=nom;u.iniciales=$('#uIni').value.trim().toLowerCase();u.cat=cat;u.dist=dd;if(c==='C')delete u.h;
+    var sd=$('#uSubD').value,sI=$('#uSubI').value,sH=$('#uSubH').value;if(c==='B'&&cat!=='B-1'&&sd){if(dd.indexOf(sd)<0){m.textContent='Para estar a cargo de la Gerencia de '+distName(sd)+' el agente tiene que tener ese distrito tildado.';return;}if(!sH){m.textContent='Poné hasta qué fecha está a cargo de la Gerencia.';return;}if(sI&&sH<sI){m.textContent='La fecha «hasta» es anterior a «desde».';return;}}
+    u.legajo=leg;u.nombre=nom;u.iniciales=$('#uIni').value.trim().toLowerCase();u.cat=cat;u.dist=dd;if(c==='C')delete u.h;u.subroga=c==='B'&&cat!=='B-1'&&sd?{dist:sd,desde:sI||todayISO(),hasta:sH}:null;
     if(nuevo)u.alta=todayISO();if(orig&&orig!==leg){saveUsers(getUsers().filter(function(x){return String(x.legajo)!==String(orig);}));}
     closeModal();guardarUsuario(u,c==='C'?'':cl,(nuevo?'Alta registrada: ':'Datos actualizados: ')+userStr(u));});
   if($('#uBaja'))$('#uBaja').addEventListener('click',function(){var b=$('#uBaja');if(!b.dataset.arm){b.dataset.arm='1';b.textContent='Confirmar baja';$('#uMsg').textContent='La baja impide que el agente ingrese. Sus turnos quedan guardados.';return;}
@@ -2100,7 +2117,8 @@ function viewDistritos(main){
 function viewConfig(main){
   var u=me(),A=isA(),s=currentSlot(SELD);
   var miClave='<div class="card block"><h4>Mi '+(A?'contraseña':'PIN')+'</h4><div class="form-grid"><div class="field"><label for="mcAct">'+(A?'Contraseña actual':'PIN actual')+'</label><input id="mcAct" type="password"></div><div class="field"><label for="mcNew">'+(A?'Contraseña nueva (mínimo 8)':'PIN nuevo (4 dígitos)')+'</label><input id="mcNew" type="password"'+(A?'':' inputmode="numeric"')+'></div></div><div class="row-end"><span class="hint" id="mcMsg"></span><button class="btn" type="button" id="mcGo">Cambiar</button></div></div>';
-  if(!A){main.innerHTML='<div class="wrap panel"><div class="ptitle"><div><h1>Mi cuenta</h1><p>'+esc(userStr(u))+' · '+esc(cargoDe(u).cargo)+' · '+esc((u.dist||[]).map(distName).join(', '))+'</p></div></div>'+miClave+'</div>';bindClave();return;}
+  if(!A){var frB=catL(u)==='B'?'<div class="card block"><h4>Mi firma registrada</h4><p class="hint">'+(esB1(u)?'Con ella firmás en conformidad los documentos del distrito desde «Para firmar».':'La usás si un categoría A te designa a cargo de la Gerencia Distrital.')+'</p>'+(firmaRegLocal(u.legajo)?'<img class="firma-img" alt="Mi firma registrada" src="'+firmaRegLocal(u.legajo)+'" style="max-width:260px">':'')+'<div class="row-end"><button class="btn" type="button" id="mcFir">'+(tieneFirmaReg()?'Cambiar mi firma':'Registrar mi firma')+'</button></div></div>':'';
+    main.innerHTML='<div class="wrap panel"><div class="ptitle"><div><h1>Mi cuenta</h1><p>'+esc(userStr(u))+' · '+esc(cargoDe(u).cargo)+' · '+esc((u.dist||[]).map(distName).join(', '))+'</p></div></div>'+miClave+frB+'</div>';bindClave();if($('#mcFir'))$('#mcFir').addEventListener('click',function(){modalFirmaReg();});return;}
   main.innerHTML='<div class="wrap wide panel"><div class="ptitle"><div><h1>Configuración</h1><p>'+esc(userStr(u))+' · dispositivo '+deviceId+'</p></div></div>'+
     '<div class="card block"><h4>Servidor</h4><div class="form-grid"><div class="field full"><label for="cUrl">Dirección del Apps Script</label><input id="cUrl" value="'+esc(cfg.syncUrl)+'" placeholder="https://script.google.com/macros/s/…/exec"></div><div class="field"><label for="cKey">Clave de sincronización</label><input id="cKey" value="'+esc(cfg.syncKey)+'"></div>'+
     '<div class="field"><label for="cDev">Distrito de este dispositivo</label><select id="cDev"><option value="">Sin asignar</option>'+usinas().map(function(d){return '<option value="'+d+'"'+(cfg.devDist===d?' selected':'')+'>'+esc(distName(d))+'</option>';}).join('')+'</select></div></div>'+
@@ -2216,7 +2234,7 @@ function bindPlanilla(main){
 
 /* ---------- control físico ---------- */
 var cfTmp=null;
-function puedeCF(){var c=catL(me());return c==='A'||c==='B';}
+function puedeCF(){var c=catL(me());return c==='A'||(c==='B'&&!esB1());}
 function viewFisico(main){
   var dist=SELD,mes=CMES,all=getTurnos(),map=mapTurnos(all),hay=all.some(function(r){return r.dist===dist&&r.fecha.slice(0,7)===mes;});
   var k=cfCalc(dist,mes,map),cf=k.cf,dec=cf&&cf.declarado,ci=D(dist).cist,L=k.L,t1=L.t[1];
@@ -2229,7 +2247,7 @@ function viewFisico(main){
     ['4','Entradas posteriores a la hora de medición (suma)',k.p4,dec&&dec.p4],['5','Consumo total del último día (restar)',k.p5,dec&&dec.p5],['6','Saldo fin del mes (3 + 4 − 5)',k.p6,dec&&dec.p6]];
   var falt=k.dif!=null&&k.dif<0,sob=k.dif!=null&&k.dif>0;
   var tanksT1=t1&&t1.existencias&&t1.existencias.length?t1.existencias:null;
-  main.innerHTML='<div class="wrap wide panel"><div class="ptitle"><div><h1>Control físico</h1><p>'+esc(distName(dist))+' · '+esc(fMes(mes))+(cf&&cf.hist?' · <span class="chip">Importado de la planilla</span>':'')+'</p></div>'+
+  main.innerHTML='<div class="wrap wide panel"><div class="ptitle"><div><h1>Control físico</h1><p>'+esc(distName(dist))+' · '+esc(fMes(mes))+(cf&&cf.hist?' · <span class="chip">Importado de la planilla</span>':'')+(cf&&!cf.hist?' '+confChip(cf.firmas&&cf.firmas.gerente,cf.devuelto):'')+'</p></div>'+(cf?devueltoHTML(cf.devuelto):'')+
     '<div class="toolbar"><div class="field"><label for="cfMes">Mes</label><input id="cfMes" type="month" value="'+mes+'"></div><button class="ghost" type="button" id="btnTraer">Traer del servidor</button></div></div>'+
     (!hay?'<p class="hint">No hay turnos de '+esc(fMes(mes))+' en este dispositivo. Tocá «Traer del servidor».</p>':'')+
     '<div class="cf-res '+(falt?'falt':sob?'sob':'')+'"><div><span>Saldo teórico</span><b>'+nOrDash(k.teor)+' L</b><small>inicio '+nOrDash(k.ini)+' + camiones '+fmt(k.ing)+' − consumo '+fmt(k.cons)+'</small></div>'+
@@ -2246,7 +2264,7 @@ function viewFisico(main){
       '<h4>Lubricantes y borras</h4><div class="tablewrap"><table><thead><tr><th></th><th>YPF N° 431 (L)</th><th>YPF N° 927 (L)</th></tr></thead><tbody>'+
       '<tr><td>Tambores cerrados</td><td>'+lubIn('c431',w,ed)+'</td><td>'+lubIn('c927',w,ed)+'</td></tr><tr><td>Tambor abierto</td><td>'+lubIn('a431',w,ed)+'</td><td>'+lubIn('a927',w,ed)+'</td></tr>'+
       '<tr><td>Borras (L)</td><td colspan="2">'+(ed?'<input class="num" id="cfBor" value="'+fmt(w.borras)+'" style="max-width:120px">':fmt(w.borras))+'</td></tr></tbody></table></div>'+
-      '<div class="firmas-cf">'+fslot('agente','Agente que efectuó la medición',w,ed)+fslot('gerente','Gerente de Distrito',w,ed)+'</div>'+
+      '<div class="firmas-cf">'+fslot('agente','Agente que efectuó la medición',w,ed)+fslot('gerente','Gerente de Distrito',w,false,cf)+'</div>'+
       '<p class="hint">Se firman dos ejemplares de un mismo tenor: uno queda en el Distrito y el otro se envía al Departamento de Estadísticas, Abastecimiento de Combustible y Aceites, Río Gallegos.</p></div>'+
     '<div class="card block noprint"><h4>Datos del control</h4><div class="form-grid"><div class="field"><label for="cfHora">Hora de la medición</label><input id="cfHora" type="time" value="'+esc(w.hora)+'"'+(ed?'':' disabled')+'></div>'+
       '<div class="field"><label for="cfIni">Saldo al inicio del mes (L)</label><input id="cfIni" class="num" value="'+fmt(w.saldoInicial)+'" placeholder="'+esc(nOrDash(k.ini))+'"'+(isA()?'':' disabled')+'></div>'+
@@ -2268,7 +2286,7 @@ function viewFisico(main){
       else if(el.id==='cfHora'){w.hora=el.value;$('#cfHoraTxt').textContent=el.value;}else if(el.id==='cfIni')w.saldoInicial=parseAR(el.value);else if(el.id==='cfObs')w.obs=el.value;else if(el.id==='cfCar')w.cargoAgente=el.value;else if(el.id==='cfBor')w.borras=parseAR(el.value);
       else if(el.dataset.lub)w.lub[el.dataset.lub]=parseAR(el.value);else if(el.id==='cfN_agente')w.agente=el.value;else if(el.id==='cfN_gerente')w.gerente=el.value;});
     main.addEventListener('focusout',function(e){var el=e.target;if(/^cfT\d+$/.test(el.id)||el.id==='cfIni'||el.id==='cfBor'||el.dataset.lub)el.value=fmt(parseAR(el.value));});
-    ['agente','gerente'].forEach(function(q){var cv=$('#cfPad_'+q);if(!cv)return;var p=makePad(cv,function(){return w.firmas[q]&&w.firmas[q].firma;},function(v){if(v)w.firmas[q]={firma:v,nombre:(q==='agente'?w.agente:w.gerente),cuando:new Date().toISOString()};else delete w.firmas[q];});
+    ['agente'].forEach(function(q){var cv=$('#cfPad_'+q);if(!cv)return;var p=makePad(cv,function(){return w.firmas[q]&&w.firmas[q].firma;},function(v){if(v)w.firmas[q]={firma:v,nombre:(q==='agente'?w.agente:w.gerente),cuando:new Date().toISOString()};else delete w.firmas[q];});
       $('#cfClr_'+q).addEventListener('click',p.clear);});
     $('#cfSave').addEventListener('click',function(){guardarCF(dist,mes);});
   }
@@ -2280,7 +2298,8 @@ function viewFisico(main){
   main.addEventListener('click',function(e){var b=e.target.closest('[data-cfmes]');if(b){CMES=b.dataset.cfmes;cfTmp=null;render();}});
 }
 function lubIn(k,w,ed){return ed?'<input class="num" data-lub="'+k+'" value="'+fmt(w.lub[k])+'" style="max-width:120px">':fmt(w.lub[k]);}
-function fslot(q,tit,w,ed){var f=w.firmas[q],n=q==='agente'?w.agente:w.gerente;
+function fslot(q,tit,w,ed,cf){var f=w.firmas[q],n=q==='agente'?w.agente:w.gerente;
+  if(q==='gerente'&&!f){var u=me(),dd=cf&&cf.dist;return '<div class="fslot"><b>'+tit+'</b><div class="sigline"></div><div class="cap">'+(cf&&u&&esFirmante(u,dd)?'<button class="btn primary small noprint" type="button" data-conf="cf|'+esc(cf.id)+'">Firmar en conformidad</button> <button class="ghost small noprint" type="button" data-devol="cf|'+esc(cf.id)+'">Devolver</button>':'<span class="hint">'+(cf?'Pendiente de conformidad del Gerente':'El Gerente firma en conformidad después de que se guarde el control')+'</span>')+'</div></div>';}
   var guardada=f&&f.firma&&String(f.firma).indexOf('data:')!==0?'<a class="hint" href="'+esc(f.firma)+'" target="_blank" rel="noopener">Firma guardada en Drive</a>':'';
   return '<div class="fslot"><b>'+tit+'</b>'+(ed?'<canvas id="cfPad_'+q+'" class="pad small" aria-label="Firma: '+esc(tit)+'"></canvas>'+guardada+'<div class="pad-tools"><input id="cfN_'+q+'" value="'+esc(n)+'" placeholder="Aclaración"><button class="ghost small" type="button" id="cfClr_'+q+'">Borrar</button></div>':
     (f&&f.firma&&String(f.firma).indexOf('data:')===0?'<img class="firma-img" alt="Firma" src="'+esc(f.firma)+'">':guardada||'<div class="sigline"></div>')+'<div class="cap">'+esc(n||'')+'</div>')+'</div>';}
@@ -2288,7 +2307,10 @@ function guardarCF(dist,mes){
   var w=cfTmp,map=mapTurnos(getTurnos()),a=getCFs(),u=me(),id='CF-'+dist+'-'+mes,old=a.filter(function(x){return x.id===id;})[0]||{};
   var rec=Object.assign({},old,{id:id,dist:dist,mes:mes,fecha:mes+'-'+pad2(monthDays(mes)),hora:w.hora,tanques:w.tanques.slice(),saldoInicial:w.saldoInicial,lub:clone(w.lub),borras:w.borras,obs:w.obs,
     agente:w.agente,cargoAgente:w.cargoAgente,gerente:w.gerente,firmas:clone(w.firmas),actualizado:new Date().toISOString(),por:{legajo:u.legajo,nombre:u.nombre,cat:u.cat}});
-  if(w.firmas.agente)w.firmas.agente.nombre=w.agente;if(w.firmas.gerente)w.firmas.gerente.nombre=w.gerente;rec.firmas=clone(w.firmas);
+  if(w.firmas.agente)w.firmas.agente.nombre=w.agente;rec.firmas=clone(w.firmas);if(old.firmas&&old.firmas.gerente)rec.firmas.gerente=clone(old.firmas.gerente);
+  var datos=function(x){return JSON.stringify([x.hora,x.tanques,x.saldoInicial,x.lub,x.borras,x.obs,x.agente,x.cargoAgente]);};
+  rec.historial=(old.historial||[]).slice();if(old.devuelto){delete rec.devuelto;rec.historial.push({cuando:rec.actualizado,por:u.nombre,txt:'Corregido lo observado por el Gerente'});}
+  if(rec.firmas.gerente&&datos(old)!==datos(rec)){delete rec.firmas.gerente;rec.gerente='';rec.historial.push({cuando:rec.actualizado,por:'Sistema',txt:'Se quitó la conformidad del Gerente porque cambiaron los datos'});toast('Cambiaron los datos: el Gerente tiene que volver a dar la conformidad.');}
   var others=a.filter(function(x){return x.id!==id;});saveCFs(others.concat([rec]));
   var k=cfCalc(dist,mes,map);rec.saldoFinal=k.p6;rec.calc={ini:k.ini,ing:k.ing,cons:k.cons,teor:k.teor,p6:k.p6,dif:k.dif,pct:k.pct};saveCFs(others.concat([rec]));
   if(!DEMO)queueAdd('cf',id,{auth:authNow()});sync(false);toast('Control físico de '+fMes(mes)+' guardado.');render();
@@ -2898,7 +2920,7 @@ function opsDelPrograma(p){if(!p||!p.dias)return [];var fs=p.dias.map(function(d
 function pedidosB(box,distArg,ofi){
   var dist=distArg||SELD,jue=pedSem,guardado=getPedidos(dist).filter(function(x){return x.id===idPG(dist,jue);})[0],prev=getPedidos(dist).filter(function(x){return x.id===idPG(dist,addDays(jue,-7));})[0]||null;
   if(!pedTmp||pedTmp.id!==idPG(dist,jue))pedTmp=guardado?clone(guardado):nuevoPedidoGasoil(dist,jue);
-  var p=pedTmp,conOP=opsDelPrograma(guardado).length,bloq=!ofi&&!!guardado&&(guardado.estado==='cargado'||conOP>0),ed=!bloq,pr=proyectar(p,prev),tot=sum(p.dias.map(function(x){return x.litros;})),aut=p.consumoDiario?p.existencia/p.consumoDiario:null;
+  var soloVer=!ofi&&esB1(),p=pedTmp,conOP=opsDelPrograma(guardado).length,bloq=soloVer||!ofi&&!!guardado&&(guardado.estado==='cargado'||conOP>0),ed=!bloq,pr=proyectar(p,prev),tot=sum(p.dias.map(function(x){return x.litros;})),aut=p.consumoDiario?p.existencia/p.consumoDiario:null;
   var tarde=new Date()>new Date(jue+'T23:59:59'),ops=getOPsGas(dist).filter(function(o){return o.fechaDespacho>=addDays(jue,-14);}).sort(function(a,b){return a.fechaDespacho<b.fechaDespacho?-1:1;}),rec=opsRecibidas(dist);
   var predOk=typeof predConsumo==='function'&&predConsumo(dist,p.dias[0].fecha)!=null;
   var of=p.oficina||{};if(ofi&&!p.oficina&&!(guardado&&guardado.estado!=='borrador')){of={origen:'WhatsApp',nota:'',recibido:jue+'T12:00'};p.oficina=of;}   // queda en el borrador: no se pierde al recalcular la pantalla
@@ -2914,7 +2936,7 @@ function pedidosB(box,distArg,ofi){
       '<div class="field full"><label for="ofN">Nota (quién lo mandó, aclaraciones)</label><input id="ofN" value="'+esc(of.nota||'')+'"></div>'+
       '<div class="field full"><label>Respaldo (captura del WhatsApp o mail) · opcional</label><div class="row-end" style="justify-content:flex-start"><button class="ghost" type="button" id="ofF">'+(of.respaldo?'Cambiar captura':'Adjuntar captura')+'</button>'+(of.respaldo?'<span class="chip g">Captura adjunta</span>'+(of.respaldo.url?' <a href="'+esc(of.respaldo.url)+'" target="_blank" rel="noopener">ver en Drive</a>':' <span class="hint">se sube al sincronizar</span>')+' <button class="ghost small" type="button" id="ofFx">Quitar</button>':'')+'</div></div></div></div>':'';
   box.innerHTML=(ofi?'<div class="row-end" style="justify-content:flex-start"><button class="ghost" type="button" id="ofVolver">← Volver a todos los distritos</button></div>':'')+ofiHTML+'<div class="card block"><h4>Pedido de gas oil · programa semanal · '+esc(D(dist).n)+'</h4>'+
-    (bloq?'<p class="banner warn">'+(conOP?'La oficina ya cargó '+conOP+' pedido(s) en YPF con este programa':'Este programa ya está cargado en YPF')+': no se puede modificar desde el distrito. Si hace falta un cambio, pedíselo a la oficina.</p>':'')+
+    (guardado?devueltoHTML(guardado.devuelto):'')+(soloVer?'<div class="banner"><span>Como Gerente Distrital revisás el programa que arma tu personal y lo firmás en conformidad'+(guardado&&guardado.estado!=='borrador'?': <button class="btn primary small" type="button" data-conf="pg|'+esc(guardado.id)+'">Firmar en conformidad</button> <button class="ghost small" type="button" data-devol="pg|'+esc(guardado.id)+'">Devolver con observación</button>':' cuando lo envíen.')+'</span></div>':'')+(bloq&&!soloVer?'<p class="banner warn">'+(conOP?'La oficina ya cargó '+conOP+' pedido(s) en YPF con este programa':'Este programa ya está cargado en YPF')+': no se puede modificar desde el distrito. Si hace falta un cambio, pedíselo a la oficina.</p>':'')+
     '<div class="ctl-sum">'+estadoPedido(p)+(p.estado==='borrador'&&tarde?' <span class="chip r">Vencido: se envía el jueves '+fFecha(jue)+'</span>':'')+'</div>'+
     '<div class="form-grid"><div class="field"><label>Capacidad total de almacenamiento</label><output>'+fmt(p.capacidad)+' L</output></div>'+
     '<div class="field"><label for="pgEx">Existencia actual (L)</label><input id="pgEx" class="num" value="'+fmt(p.existencia)+'"><small class="hint">'+esc(p.exFuente||'')+'</small></div>'+
@@ -2928,7 +2950,7 @@ function pedidosB(box,distArg,ofi){
     '<h4>Proyección de existencia</h4><div class="tablewrap"><table><thead><tr><th>Día</th><th>Consumo estimado</th><th>Camión</th><th>Existencia al final del día</th><th>Autonomía</th></tr></thead><tbody>'+pr.map(function(x){
       return '<tr class="'+(x.bajo||x.st<0?'row-bad':'')+'"><td>'+(x.lbl||(DIAS_SEM[(diaSemana(x.f)+5)%7]+' '+fFecha(x.f)))+(x.prev&&!x.lbl?' <small class="hint">(semana anterior)</small>':'')+'</td><td class="n">'+fmt(x.c)+'</td><td class="n">'+(x.cam?fmt(x.cam):'—')+'</td><td class="n '+(x.st<0?'cbad':'')+'">'+fmt(x.st)+(x.lleno?' <span class="chip r">no entra</span>':'')+'</td><td class="n">'+(x.aut!=null?fmt(Math.round(x.aut*10)/10)+' días':'')+'</td></tr>';}).join('')+'</tbody></table></div>'+
     '<div class="form-grid">'+[0,1,2,3].map(function(i){return '<div class="field full"><label for="pgO'+i+'">Observación '+(i+1)+'</label><input id="pgO'+i+'" value="'+esc(p.obs[i]||'')+'"></div>';}).join('')+'</div>'+
-    (ofi?'':'<div class="fslot" style="max-width:420px"><b>Firma y aclaración · agente solicitante</b><canvas id="pgPad" class="pad small"></canvas><div class="pad-tools"><span>'+esc(p.solicitante?p.solicitante.nombre:'')+'</span><button class="ghost small" type="button" id="pgClr">Borrar</button></div></div>')+
+    (ofi||soloVer?'':'<div class="fslot" style="max-width:420px"><b>Firma y aclaración · agente solicitante</b><canvas id="pgPad" class="pad small"></canvas><div class="pad-tools"><span>'+esc(p.solicitante?p.solicitante.nombre:'')+'</span><button class="ghost small" type="button" id="pgClr">Borrar</button></div></div>')+
     '<p class="hint" id="pgMsg"></p><div class="row-end"><button class="ghost" type="button" id="pgPdf">Descargar PDF para firmar (A4)</button><button class="ghost" type="button" id="pgXls">Excel</button>'+(bloq?'':ofi?'<button class="btn primary" type="button" id="pgSend">Guardar programa del distrito</button>':'<button class="btn" type="button" id="pgSave">Guardar borrador</button><button class="btn primary" type="button" id="pgSend">'+(p.estado==='enviado'?'Reenviar a la oficina':'Enviar a la oficina')+'</button>')+'</div></div>'+
     '<div class="card block"><h4>Camiones pedidos a YPF para '+esc(D(dist).n)+'</h4>'+(ops.length?'<div class="tablewrap"><table><thead><tr><th>N° de pedido (OP)</th><th>Despacho</th><th>Litros</th><th>Estado en YPF</th><th>Camión compartido con</th><th>Recibido</th></tr></thead><tbody>'+ops.map(function(o){var r=rec[o.nPedido];
       return '<tr><td><b>'+esc(o.nPedido)+'</b></td><td>'+fFecha(o.fechaDespacho)+'</td><td class="n">'+fmt(o.cant)+'</td><td>'+esc(o.estado||'')+'</td><td>'+esc(compartidoTxt(o))+'</td><td>'+(r?'<span class="chip g">'+esc(r.remito)+' · '+fFecha(r.fecha)+'</span>':'<span class="hint">—</span>')+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">La oficina todavía no cargó pedidos de YPF para estas fechas.</p>')+'</div>'+
@@ -2943,7 +2965,7 @@ function pedidosB(box,distArg,ofi){
   if(bloq){box.querySelectorAll('.card input, .card select').forEach(function(el){if(!el.closest('.ofi'))el.disabled=true;});$('#pgSug').disabled=true;}
   if($('#pgSave'))$('#pgSave').addEventListener('click',function(){guardarPedido(p,false);});
   if($('#pgSend'))$('#pgSend').addEventListener('click',function(){var m=$('#pgMsg');if(p.existencia==null){m.textContent='Falta la existencia actual.';return;}if(!p.consumoDiario){m.textContent='Falta el consumo diario.';return;}if(!sum(p.dias.map(function(x){return x.litros;}))){m.textContent='Cargá los litros de al menos un día.';return;}
-    if(deDist){var u=me();p.modOficina=(p.modOficina||[]).concat([{legajo:u.legajo,nombre:u.nombre,cuando:new Date().toISOString()}]);p.actualizado=new Date().toISOString();upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});sync(false);toast('Programa de '+D(dist).n+' corregido por la oficina.');pedOfi=null;pedTmp=null;render();var pg=getPedidos().filter(function(z){return z.id===p.id;})[0];if(difsPrograma(pg).length)avisoDiferencias(pg,render);return;}
+    if(deDist){var u=me();p.modOficina=(p.modOficina||[]).concat([{legajo:u.legajo,nombre:u.nombre,cuando:new Date().toISOString()}]);quitarConf(p,u,'la oficina corrigió el programa');p.actualizado=new Date().toISOString();upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});sync(false);toast('Programa de '+D(dist).n+' corregido por la oficina.');pedOfi=null;pedTmp=null;render();var pg=getPedidos().filter(function(z){return z.id===p.id;})[0];if(difsPrograma(pg).length)avisoDiferencias(pg,render);return;}
     if(ofi){leer();if(!/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(of.recibido||'')){m.textContent='Falta el día y la hora en que lo mandó el distrito.';return;}guardarPedidoOficina(p,of);}else guardarPedido(p,true);});
   if(ofi){$('#ofVolver').addEventListener('click',function(){pedOfi=null;pedTmp=null;render();});}
   if(ofi&&!deDist){
@@ -2960,7 +2982,7 @@ function guardarPedidoOficina(p,of){var u=me(),ahora=new Date().toISOString(),re
   var sl=of.solic!=null?of.solic:($('#ofS')?$('#ofS').value:''),gu=getUsers().filter(function(x){return String(x.legajo)===String(sl);})[0];
   p.solicitante=gu?{legajo:gu.legajo,nombre:gu.nombre,cat:gu.cat}:{legajo:'',nombre:'',cat:''};p.firma=null;
   if(p.estado==='borrador'||!p.estado)p.estado='enviado';if(p.estado==='enviado'&&todoConOP(p))p.estado='cargado';
-  p.enviado={cuando:rec,por:{legajo:u.legajo,nombre:u.nombre+' (oficina · '+of.origen+')'}};p.actualizado=ahora;
+  p.enviado={cuando:rec,por:{legajo:u.legajo,nombre:u.nombre+' (oficina · '+of.origen+')'}};p.actualizado=ahora;quitarConf(p,u,'la oficina cargó o cambió el programa');
   upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});sync(false);toast('Programa de '+D(p.dist).n+' guardado por la oficina.');pedOfi=null;pedTmp=null;render();
   var pg=getPedidos().filter(function(z){return z.id===p.id;})[0];if(difsPrograma(pg).length)avisoDiferencias(pg,render);}
 function cumplimiento(p,hoy){if(!p||!p.estado||p.estado==='borrador'){return new Date(hoy||new Date())>new Date(((p&&p.fecha)||'')+'T23:59:59')?'no':'pend';}
@@ -2978,8 +3000,8 @@ function estadoPedido(p){if(!p)return '<span class="chip nn">Sin pedido</span>';
   var nd=difsPrograma(p).length;if(nd)ofc='<span class="chip y" title="Los litros del programa no coinciden con las OP cargadas">Con diferencia ('+nd+' día'+(nd>1?'s':'')+')</span>'+ofc;
   if(p.ajustes&&p.ajustes.length)ofc+=' <span class="chip" title="'+esc(p.ajustes.map(function(a){return fFecha(a.fecha)+': '+fmt(a.de)+' → '+fmt(a.a)+' L ('+a.motivo+', '+a.por.nombre+')';}).join(' · '))+'">Ajustado a las OP</span>';
   var lleg=(p.oficina&&p.oficina.por?'Recibido ':'Enviado ')+fFH(p.enviado.cuando)+(t?' · fuera de término':'');
-  return (p.estado==='cargado'?'<span class="chip b" title="'+esc(lleg)+'">Cargado en YPF</span>':'<span class="chip '+(t?'y':'g')+'">'+lleg+'</span>')+ofc;}
-function guardarPedido(p,enviar){var u=me();p.actualizado=new Date().toISOString();if(enviar){if(p.oficina&&!p.oficina.corregidoPorDistrito)p.oficina.corregidoPorDistrito={legajo:u.legajo,nombre:u.nombre,cuando:p.actualizado};if(p.oficina)p.solicitante={legajo:u.legajo,nombre:u.nombre,cat:u.cat};p.estado='enviado';p.enviado={cuando:new Date().toISOString(),por:{legajo:u.legajo,nombre:u.nombre}};}
+  return (p.estado==='cargado'?'<span class="chip b" title="'+esc(lleg)+'">Cargado en YPF</span>':'<span class="chip '+(t?'y':'g')+'">'+lleg+'</span>')+ofc+' '+confChip(p.conf,p.devuelto);}
+function guardarPedido(p,enviar){var u=me();p.actualizado=new Date().toISOString();if(enviar){if(p.oficina&&!p.oficina.corregidoPorDistrito)p.oficina.corregidoPorDistrito={legajo:u.legajo,nombre:u.nombre,cuando:p.actualizado};if(p.oficina)p.solicitante={legajo:u.legajo,nombre:u.nombre,cat:u.cat};p.estado='enviado';p.enviado={cuando:new Date().toISOString(),por:{legajo:u.legajo,nombre:u.nombre}};quitarConf(p,u,'se reenvió el programa');}
   upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});sync(false);toast(enviar?'Pedido enviado a la oficina.':'Borrador guardado.');render();}
 function compartidoTxt(o){if(!o.grupo)return '—';var otros=getOPsGas().filter(function(x){return x.grupo===o.grupo&&x.id!==o.id;});return otros.length?otros.map(function(x){return D(x.dist).n+' ('+fmt(x.cant)+' L, OP '+x.nPedido+')';}).join(', '):o.grupo;}
 
@@ -2987,17 +3009,17 @@ function compartidoTxt(o){if(!o.grupo)return '—';var otros=getOPsGas().filter(
 function lubListaHTML(dist){var ls=getPedidos(dist).filter(function(x){return x.tipo==='lub';}).sort(function(a,b){return a.fecha<b.fecha?1:-1;});
   return '<div class="card block"><h4>Pedidos de lubricante · '+esc(D(dist).n)+'</h4><p class="hint">Se piden con 25 días de anticipación. Tambor de 205 L.</p>'+(ls.length?'<div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Aceites</th><th>Para cubrir</th><th>Estado</th><th>N° de pedido YPF</th><th></th></tr></thead><tbody>'+ls.map(function(p){
     return '<tr><td>'+fFecha(p.fecha)+'</td><td>'+ACEITES.filter(function(a){return p.tambores&&p.tambores[a.k];}).map(function(a){return esc(a.n)+': '+p.tambores[a.k];}).join('<br>')+'</td><td>'+esc(p.tiempo||'')+'</td><td>'+estadoLub(p)+'</td><td>'+(function(){var o=p.nPedido&&getOPsLub().filter(function(z){return z.nPedido===p.nPedido;})[0],e=o?o.estado:p.opEstado,f=o?o.fechaDespacho:p.opEntrega,dn=o&&o.destN?nomDist(o.destN):p.opDestino;return esc(p.nPedido||'—')+(p.nPedido&&(e||f)?'<br><small class="hint">'+esc(e||'')+(f?' · entrega '+fFecha(f):'')+(dn?' · en '+esc(dn):'')+'</small>':'');})()+'</td><td><button class="ghost small" type="button" data-lub="'+esc(p.id)+'">Abrir</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="hint">Sin pedidos de lubricante.</p>')+
-    (isB()?'<div class="row-end"><button class="btn" type="button" id="lubNew">Nuevo pedido de lubricante</button></div>':'')+'</div>';}
-function estadoLub(p){return {borrador:'<span class="chip">Borrador</span>',enviado:'<span class="chip g">Enviado</span>',pedido:'<span class="chip b">Pedido a YPF</span>',entregado:'<span class="chip g">Entregado</span>'}[p.estado]||esc(p.estado);}
+    (cargaDatos()?'<div class="row-end"><button class="btn" type="button" id="lubNew">Nuevo pedido de lubricante</button></div>':'')+'</div>';}
+function estadoLub(p){return (p.estado&&p.estado!=='borrador'?confChip(p.conf,p.devuelto)+' ':'')+({borrador:'<span class="chip">Borrador</span>',enviado:'<span class="chip g">Enviado</span>',pedido:'<span class="chip b">Pedido a YPF</span>',entregado:'<span class="chip g">Entregado</span>'}[p.estado]||esc(p.estado));}
 function bindLub(box,dist){if($('#lubNew'))$('#lubNew').addEventListener('click',function(){modalLub(null,dist);});
   box.addEventListener('click',function(e){var b=e.target.closest('[data-lub]');if(b)modalLub(b.dataset.lub,dist);});}
 function modalLub(id,dist){
   var p=id?clone(getPedidos().filter(function(x){return x.id===id;})[0]):{id:'PL-'+dist+'-'+todayISO()+'-'+uid().slice(-4),tipo:'lub',dist:dist,fecha:todayISO(),tambores:{},tiempo:'',jefe:'',gerente:'',firmaJefe:null,firmaGerente:null,estado:'borrador'};
-  var ed=isB()&&(p.estado==='borrador'||p.estado==='enviado'),A=isA();
-  openModal('<h3>Pedido de lubricante · '+esc(D(p.dist).n)+'</h3><div class="form-grid"><div class="field"><label for="plF">Fecha de solicitud</label><input id="plF" type="date" value="'+p.fecha+'"'+(ed?'':' disabled')+'></div>'+
+  var ed=cargaDatos()&&(p.estado==='borrador'||p.estado==='enviado'),A=isA(),fir=p.id&&p.estado&&p.estado!=='borrador'&&esFirmante(me(),p.dist);
+  openModal('<h3>Pedido de lubricante · '+esc(D(p.dist).n)+'</h3>'+devueltoHTML(p.devuelto)+(p.estado&&p.estado!=='borrador'?'<div class="ctl-sum">'+confChip(p.conf,p.devuelto)+'</div>':'')+'<div class="form-grid"><div class="field"><label for="plF">Fecha de solicitud</label><input id="plF" type="date" value="'+p.fecha+'"'+(ed?'':' disabled')+'></div>'+
     '<div class="field"><label for="plT">Para cubrir la necesidad por el tiempo de</label><input id="plT" value="'+esc(p.tiempo)+'" placeholder="Ejemplo: 3 meses"'+(ed?'':' disabled')+'></div></div>'+
     '<div class="tablewrap"><table><thead><tr><th>Tipo de aceite</th><th>Cantidad de tambores</th><th>Litros</th></tr></thead><tbody>'+ACEITES.map(function(a){var n=p.tambores[a.k]||'';return '<tr><td>'+esc(a.n)+'</td><td><input class="num" data-ac="'+a.k+'" value="'+n+'" style="max-width:100px"'+(ed?'':' disabled')+'></td><td class="n" id="plL'+a.k+'">'+(n?fmt(n*205):'')+'</td></tr>';}).join('')+'</tbody></table></div>'+
-    '<div class="firmas-cf"><div class="fslot"><b>Jefe de Usina</b>'+(ed?'<canvas id="plPadJ" class="pad small"></canvas>':'')+'<input id="plJ" value="'+esc(p.jefe)+'" placeholder="Aclaración"'+(ed?'':' disabled')+'></div><div class="fslot"><b>Gerente de Distrito</b>'+(ed?'<canvas id="plPadG" class="pad small"></canvas>':'')+'<input id="plG" value="'+esc(p.gerente)+'" placeholder="Aclaración"'+(ed?'':' disabled')+'></div></div>'+
+    '<div class="firmas-cf"><div class="fslot"><b>Jefe de Usina</b>'+(ed?'<canvas id="plPadJ" class="pad small"></canvas>':'')+'<input id="plJ" value="'+esc(p.jefe)+'" placeholder="Aclaración"'+(ed?'':' disabled')+'></div><div class="fslot"><b>Gerente de Distrito</b>'+(p.firmaGerente&&String(p.firmaGerente).indexOf('data:')===0?'<img class="firma-img" alt="Firma del Gerente" src="'+p.firmaGerente+'">':p.firmaGerente?'<p class="hint">Firma guardada en Drive</p>':'')+'<div class="cap">'+(p.conf?esc(p.gerente||p.conf.nombre)+' · '+fFH(p.conf.cuando):fir?'<button class="btn primary small" type="button" data-conf="lub|'+esc(p.id)+'">Firmar en conformidad</button> <button class="ghost small" type="button" data-devol="lub|'+esc(p.id)+'">Devolver</button>':'<span class="hint">La firma el Gerente en conformidad desde «Para firmar».</span>')+'</div></div></div>'+
     (A?'<div class="form-grid"><div class="field"><label for="plOP">N° de pedido YPF</label><input id="plOP" value="'+esc(p.nPedido||'')+'"></div><div class="field"><label for="plE">Estado</label><select id="plE">'+['enviado','pedido','entregado'].map(function(s){return '<option value="'+s+'"'+(p.estado===s?' selected':'')+'>'+{enviado:'Recibido de distrito',pedido:'Pedido a YPF',entregado:'Entregado'}[s]+'</option>';}).join('')+'</select></div></div>':'')+
     '<p class="hint" id="plMsg"></p><div class="row-end"><button class="ghost" type="button" id="plPdf">PDF (original y copia)</button><button class="ghost" type="button" id="plXls">Excel</button>'+(ed?'<button class="btn" type="button" id="plSave">Guardar borrador</button><button class="btn primary" type="button" id="plSend">Enviar a la oficina</button>':'')+(A?'<button class="btn primary" type="button" id="plA">Guardar</button>':'')+'<button class="btn" data-close type="button">Cerrar</button></div>');
   var card=$('#modalCard');
@@ -3005,10 +3027,9 @@ function modalLub(id,dist){
     else if(el.id==='plF')p.fecha=el.value;else if(el.id==='plT')p.tiempo=el.value;else if(el.id==='plJ')p.jefe=el.value;else if(el.id==='plG')p.gerente=el.value;else if(el.id==='plOP')p.nPedido=el.value.trim();else if(el.id==='plE')p.estado=el.value;});
   card.addEventListener('change',function(e){if(e.target.id==='plE')p.estado=e.target.value;});
   if($('#plPadJ'))makePad($('#plPadJ'),function(){return p.firmaJefe;},function(v){p.firmaJefe=v;});
-  if($('#plPadG'))makePad($('#plPadG'),function(){return p.firmaGerente;},function(v){p.firmaGerente=v;});
   $('#plPdf').addEventListener('click',function(){prepFirmas(p).then(function(q){closeModal();verDoc('Pedido de lubricante',pdfPedidoLub(q,{firmas:true}),'Pedido de lubricante '+D(p.dist).n);});});
   $('#plXls').addEventListener('click',function(){excelPedidoLub(p).catch(function(e){toast(e.message);});});
-  function save(env){if(!Object.keys(p.tambores).length){$('#plMsg').textContent='Cargá la cantidad de tambores de al menos un aceite.';return;}if(env){p.estado='enviado';p.enviado={cuando:new Date().toISOString(),por:{legajo:me().legajo,nombre:me().nombre}};}
+  function save(env){if(!Object.keys(p.tambores).length){$('#plMsg').textContent='Cargá la cantidad de tambores de al menos un aceite.';return;}if(env){p.estado='enviado';p.enviado={cuando:new Date().toISOString(),por:{legajo:me().legajo,nombre:me().nombre}};if(p.conf){p.firmaGerente=null;p.gerente='';}quitarConf(p,me(),'se reenvió el pedido');}
     p.actualizado=new Date().toISOString();upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});closeModal();sync(false);toast(env?'Pedido de lubricante enviado.':'Borrador guardado.');render();}
   if($('#plSave'))$('#plSave').addEventListener('click',function(){save(false);});if($('#plSend'))$('#plSend').addEventListener('click',function(){save(true);});
   if($('#plA'))$('#plA').addEventListener('click',function(){p.actualizado=new Date().toISOString();upsertPedido(clone(p));if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});closeModal();sync(false);toast('Pedido de lubricante actualizado.');render();});
@@ -3237,7 +3258,7 @@ function altaVigente(x){return x.estado==='activa'&&new Date(x.vence)>new Date()
 function altaLibres(x){return (x.slots||[]).filter(function(s){return !(x.usados&&x.usados[s]);});}
 function altaPara(dist,f,t){var u=me();if(!u)return null;var k=slotK(f,t);
   return getAltas().filter(function(x){return x.dist===dist&&String(x.legajoB)===String(u.legajo)&&altaVigente(x)&&x.slots.indexOf(k)>=0&&!(x.usados&&x.usados[k]);})[0]||null;}
-function altasPedidas(){var ds=misDistritos();return getAltas().filter(function(x){return x.estado==='pedida'&&ds.indexOf(x.dist)>=0;});}
+function altasPedidas(){var ds=misDistritos(),b1={};getUsers().forEach(function(u){if(u.cat==='B-1')b1[String(u.legajo)]=1;});return getAltas().filter(function(x){return x.estado==='pedida'&&ds.indexOf(x.dist)>=0&&!b1[String(x.legajoB)];});}
 function misAltasActivas(){var u=me();return getAltas().filter(function(x){return String(x.legajoB)===String(u.legajo)&&altaVigente(x)&&altaLibres(x).length;});}
 function misAltasPedidas(){var u=me();return getAltas().filter(function(x){return String(x.legajoB)===String(u.legajo)&&x.estado==='pedida';});}
 var DIAS_C=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -3275,6 +3296,7 @@ function mesDe(slots){var s=(slots||[]).slice().sort();return s.length?s[0].slic
 
 /* ---------- B: pedir alta ---------- */
 function modalPedirAlta(pre,motivo){
+  if(esB1()){openModal('<h3>Corrección de datos</h3><p>Como <b>Gerente Distrital</b> no cargás ni corregís datos: revisás y firmás en conformidad lo que arma tu personal.</p><ul><li>Si encontrás un error en un documento, usá <b>«Devolver con observación»</b> en la pestaña <b>Para firmar</b>: le llega al personal del distrito para que lo corrija.</li><li>Si hace falta que lo corrijas vos, pedile a la oficina central (categoría A) que te dé el <b>ALTA</b>; te aparece en el Calendario.</li></ul><div class="row-end"><button class="btn primary" data-close type="button">Entendido</button></div>',true);return;}
   pre=pre||{};var u=me(),ds=misDistritos(),dist=pre.dist||SELD,G={dist:dist,mes:mesDe(pre.slots),sel:selDe(pre.slots)};
   openModal('<h3>Pedir ALTA para cargar o corregir turnos</h3>'+(motivo?'<p class="banner warn">'+esc(motivo)+'</p>':'')+
     '<p class="hint">Sin el ALTA de un categoría A no se puede cargar ni corregir ningún turno. Marcá en la grilla los días y turnos que necesitás, contá qué vas a hacer y enviá el pedido. Cuando la oficina te dé el ALTA, te aparece en el <b>Calendario</b> y tenés <b>'+ALTA_H+' horas</b> para usarla.</p>'+
@@ -3338,7 +3360,8 @@ function altasCardA(){
 }
 function altasCardB(){
   var act=misAltasActivas(),ped=misAltasPedidas(),u=me(),rech=getAltas().filter(function(x){return String(x.legajoB)===String(u.legajo)&&x.estado==='rechazada'&&x.rechazo&&new Date()-new Date(x.rechazo.cuando)<3*86400000;});
-  var h='<div class="card block altas"><div class="row-end" style="justify-content:space-between;align-items:center"><h4 style="margin:0">Mis ALTAS para cargar o corregir turnos</h4><button class="btn sec" type="button" id="altaPedir">Pedir ALTA</button></div>';
+  var b1=esB1(u);if(b1&&!act.length)return '';
+  var h='<div class="card block altas"><div class="row-end" style="justify-content:space-between;align-items:center"><h4 style="margin:0">Mis ALTAS para cargar o corregir turnos</h4>'+(b1?'':'<button class="btn sec" type="button" id="altaPedir">Pedir ALTA</button>')+'</div>';
   if(!act.length&&!ped.length&&!rech.length)return h+'<p class="hint">Para cargar o corregir un turno necesitás el ALTA de un categoría A. Tocá <b>Pedir ALTA</b>, marcá los días y turnos y enviá el pedido.</p></div>';
   act.forEach(function(x){h+='<div class="alta-act"><p><span class="chip g">ALTA activa</span> Otorgada por <b>'+esc(x.otorgada.nombre)+'</b> · '+esc(D(x.dist).n)+' · '+esc(venceTxt(x))+(x.nota?'<br><small>Nota: '+esc(x.nota)+'</small>':'')+'</p><div class="alta-slots">'+
     altaLibres(x).sort().map(function(k){var s=slotDeK(k),r=mapTurnos(getTurnos(x.dist))[x.dist+'#'+s.fecha+'#'+s.turno];return '<button class="btn '+(r?'':'primary ')+'small" type="button" data-altausar="'+esc(x.dist+'|'+k)+'">'+(r?'Corregir ':'Cargar ')+esc(diaCorto(s.fecha))+' · '+TURNOS[s.turno]+'</button>';}).join('')+'</div></div>';});
@@ -3409,6 +3432,140 @@ function confirmCloseSup(){
   $('#doCloseSup').addEventListener('click',function(){$('#doCloseSup').setAttribute('aria-disabled','true');$('#doCloseSup').textContent='Registrando ubicación…';getPos().then(doCloseSup);});
 }
 function avisosDia(dist,f){var out=[];[0,1,2,3].forEach(function(t){var r=mapTurnos(getTurnos(dist))[dist+'#'+f+'#'+t];if(r&&r.porAlta)r.porAlta.forEach(function(e){out.push(e);});});return out;}
+
+/* =====================================================================
+   CONFORMIDAD DEL GERENTE DISTRITAL (B-1 o subrogante designado por un A)
+   El B-1 no carga datos: revisa y firma en conformidad, o devuelve con observación.
+   ===================================================================== */
+function confChip(firmado,dev){
+  if(firmado)return '<span class="chip g" title="'+esc((firmado.nombre||'')+(firmado.cuando?' · '+fFH(firmado.cuando):''))+'">Conformado por el Gerente</span>';
+  if(dev)return '<span class="chip r" title="'+esc(dev.motivo||'')+'">Devuelto al distrito</span>';
+  return '<span class="chip y">Pendiente de conformidad del Gerente</span>';}
+function devueltoHTML(dev){if(!dev)return '';return '<div class="banner warn noprint"><span><b>Devuelto por '+esc(dev.nombre)+' el '+fFH(dev.cuando)+':</b> '+esc(dev.motivo)+(cargaDatos()||isA()?'<br>Corregí lo observado y volvé a guardar o enviar: le vuelve al Gerente para su conformidad.':'')+'</span></div>';}
+function quitarConf(p,u,porque){var h=p.historial||(p.historial=[]);
+  if(p.devuelto){h.push({cuando:new Date().toISOString(),por:u.nombre,txt:'Corregido lo observado por el Gerente'});delete p.devuelto;}
+  if(p.conf){h.push({cuando:new Date().toISOString(),por:'Sistema',txt:'Se quitó la conformidad del Gerente porque '+porque});delete p.conf;}}
+function nombreFirma(u,dist){return u.nombre+(esB1(u)?'':' (a/c Gerencia Distrital)');}
+
+/* ---------- firma registrada ---------- */
+function firmaRegLocal(leg){return sget('cpt.firmaRegData.'+leg,null);}
+function miFirmaData(){var u=me(),d=firmaRegLocal(u.legajo);if(d)return Promise.resolve(d);
+  if(u.firmaReg&&/^https?:/.test(u.firmaReg))return traerFirma(u.firmaReg).then(function(x){if(x)sset('cpt.firmaRegData.'+u.legajo,x);return x;});return Promise.resolve(null);}
+function tieneFirmaReg(){var u=me();return !!(firmaRegLocal(u.legajo)||u.firmaReg);}
+function modalFirmaReg(despues){
+  var u=me(),tmp=null;
+  openModal('<h3>Mi firma registrada</h3><p class="hint">Dibujala una sola vez. Después firmás cada documento con un toque y tu '+(isA()?'contraseña':'PIN')+'. Queda registrado quién firmó y cuándo.</p>'+
+    '<div class="fslot"><b>'+esc(u.nombre)+' · '+esc(cargoDe(u).abrev)+'</b><canvas id="frPad" class="pad"></canvas><div class="pad-tools"><span class="hint">Firmá con el dedo, el lápiz o el mouse</span><button class="ghost small" type="button" id="frClr">Borrar</button></div></div>'+
+    '<div class="field"><label for="frPw">'+(isA()?'Contraseña':'PIN')+' para confirmar</label><input id="frPw" type="password" inputmode="'+(isA()?'text':'numeric')+'" autocomplete="current-password"></div>'+
+    '<p class="hint" id="frMsg"></p><div class="row-end"><button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="frGo">Guardar mi firma</button></div>',true);
+  var p=makePad($('#frPad'),function(){return tmp;},function(v){tmp=v;});$('#frClr').addEventListener('click',p.clear);
+  $('#frGo').addEventListener('click',function(){var m=$('#frMsg');if(!tmp){m.textContent='Dibujá tu firma en el recuadro.';return;}
+    verificarClave(u,$('#frPw').value).then(function(ok){if(!ok){m.textContent=(isA()?'Contraseña':'PIN')+' incorrecto.';return;}
+      sset('cpt.firmaRegData.'+u.legajo,tmp);if(!DEMO)queueAdd('firmareg',String(u.legajo),{auth:authNow()});else{var a=getUsers();a.forEach(function(x){if(String(x.legajo)===String(u.legajo))x.firmaReg='demo';});saveUsers(a);}
+      closeModal();toast('Firma registrada.');sync(false);if(despues)despues();else render();}).catch(function(e){m.textContent=e.message;});});
+}
+
+/* ---------- documentos para la conformidad ---------- */
+function docsFirma(){
+  var u=me();if(!u)return [];var ds=distFirma(u),out=[],lim=addDays(todayISO(),-120);if(!ds.length)return out;
+  function ok(d){return ds.indexOf(String(d))>=0;}
+  getInformes().forEach(function(x){if(!ok(x.dist)||x.estado==='anulado'||x.demo&&!DEMO)return;
+    if(x.tipo==='Resumen mensual'){out.push({k:'res',id:x.id,dist:x.dist,mes:x.mes,titulo:'Resumen mensual · '+fMes(x.mes),fecha:x.fechaHecho,por:x.historial&&x.historial[0]?x.historial[0].por:'',firmado:x.firmas&&x.firmas.gerente,dev:x.devuelto});return;}
+    if(x.estado==='solicitado'&&!(x.descripcion||'').trim())return;if((x.fechaHecho||'')<lim&&!(x.firmas&&x.firmas.gerente))return;
+    out.push({k:'inf',id:x.id,dist:x.dist,titulo:'Informe '+informeLabel(x)+' · '+x.tipo+(x.titulo?' · '+x.titulo:''),fecha:x.fechaHecho,por:x.creadoPor?x.creadoPor.nombre:'',porLeg:x.creadoPor&&x.creadoPor.legajo,firmado:x.firmas&&x.firmas.gerente,dev:x.devuelto});});
+  ds.forEach(function(d){var m=mesAnt(todayISO().slice(0,7)),rid='RES-'+d+'-'+m;if(!out.some(function(o){return o.id===rid;})&&getTurnos(d).some(function(r){return r.fecha.slice(0,7)===m;}))
+    out.push({k:'res',id:rid,dist:d,mes:m,titulo:'Resumen mensual · '+fMes(m),fecha:m+'-'+pad2(monthDays(m)),por:'',firmado:null,dev:null});});
+  getCFs().forEach(function(c){if(!ok(c.dist)||c.hist)return;out.push({k:'cf',id:c.id,dist:c.dist,titulo:'Control físico · '+fMes(c.mes),fecha:c.fecha,por:c.por?c.por.nombre:'',porLeg:c.por&&c.por.legajo,firmado:c.firmas&&c.firmas.gerente,dev:c.devuelto});});
+  getPedidos().forEach(function(p){if(!ok(p.dist)||!p.estado||p.estado==='borrador'||(p.fecha||'')<lim)return;
+    out.push({k:p.tipo==='lub'?'lub':'pg',id:p.id,dist:p.dist,titulo:p.tipo==='lub'?'Pedido de lubricante · '+fFecha(p.fecha):'Programa semanal de gasoil · jueves '+fFecha(p.fecha),fecha:p.fecha,por:p.enviado&&p.enviado.por?p.enviado.por.nombre:'',porLeg:p.enviado&&p.enviado.por&&p.enviado.por.legajo,firmado:p.conf,dev:p.devuelto});});
+  return out.sort(function(a,b){return (a.fecha||'')<(b.fecha||'')?1:-1;});
+}
+function pendientesFirma(){return docsFirma().filter(function(d){return !d.firmado&&!d.dev;});}
+function itemDe(k,a,b){if(k==='res')return {k:'res',dist:a,mes:b,id:'RES-'+a+'-'+b,titulo:'Resumen mensual · '+fMes(b)};return docsFirma().filter(function(d){return d.k===k&&d.id===a;})[0]||null;}
+function verItem(it){
+  if(it.k==='inf')modalInforme(it.id);else if(it.k==='res')modalResumen(it.dist,it.mes);
+  else if(it.k==='cf'){var c=getCFs().filter(function(x){return x.id===it.id;})[0];if(c){closeModal();SELD=c.dist;CMES=c.mes;cfTmp=null;VIEW='fisico';render();window.scrollTo(0,0);}}
+  else if(it.k==='pg'){var p=getPedidos().filter(function(x){return x.id===it.id;})[0];if(p){closeModal();SELD=p.dist;pedSem=p.fecha;pedTmp=null;VIEW='pedidos';render();window.scrollTo(0,0);}}
+  else if(it.k==='lub'){var q=getPedidos().filter(function(x){return x.id===it.id;})[0];if(q)modalLub(q.id,q.dist);}
+}
+function resumenRec(dist,mes){
+  var rid='RES-'+dist+'-'+mes,r=getInformes(dist).filter(function(x){return x.id===rid;})[0];if(r)return clone(r);var dd=monthDays(mes);
+  return {id:rid,dist:dist,distrito:D(dist).n,tipo:'Resumen mensual',mes:mes,anio:mes.slice(0,4),num:0,creado:new Date().toISOString(),fechaHecho:mes+'-'+pad2(dd),titulo:'Resumen mensual '+fMes(mes),firmas:{},historial:[],estado:'pendiente',origen:'manual',demo:DEMO};}
+/** aplica la firma o la devolución al documento y lo encola para el servidor */
+function aplicarConf(it,f,dev){
+  var u=me(),ahora=new Date().toISOString(),txt=f?'Conformidad del Gerente'+(esB1(u)?'':' (a/c Gerencia Distrital)'):'Devuelto por el Gerente: '+dev.motivo,h={cuando:ahora,por:u.nombre,txt:txt};
+  if(it.k==='inf'||it.k==='res'){
+    var x=it.k==='res'?resumenRec(it.dist,it.mes):clone(getInformes().filter(function(y){return y.id===it.id;})[0]);if(!x)return false;x.firmas=x.firmas||{};
+    if(f&&x.firmas.jefe&&String(x.firmas.jefe.legajo)===String(u.legajo)){toast('Ya firmaste este documento como Jefe de División: la conformidad del Gerente la tiene que dar otra persona.');return false;}
+    if(f){x.firmas.gerente=f;delete x.devuelto;if(it.k==='res'){var ts=getTurnos(it.dist).filter(function(r){return r.fecha.slice(0,7)===it.mes;});x.totales={turnos:ts.length,consumo:sum(ts.map(function(t){return t.consumo;})),ingresos:sum(ts.map(function(t){return t.ingresos;})),informes:getInformes(it.dist).filter(function(i){return i.tipo!=='Resumen mensual'&&(i.fechaHecho||'').slice(0,7)===it.mes;}).map(function(i){return i.id;})};}}
+    else x.devuelto=dev;
+    x.historial=(x.historial||[]).concat([h]);x.estado=estadoAuto(x);upsertInforme(x);return true;}
+  if(it.k==='cf'){var a=getCFs(),c=a.filter(function(y){return y.id===it.id;})[0];if(!c)return false;c.firmas=c.firmas||{};
+    if(f){c.firmas.gerente={firma:f.firma,nombre:f.nombre,legajo:f.legajo,cuando:f.cuando};c.gerente=f.nombre;delete c.devuelto;}else c.devuelto=dev;
+    c.historial=(c.historial||[]).concat([h]);saveCFs(a);cfTmp=null;if(!DEMO)queueAdd('cf',c.id,{auth:authNow()});return true;}
+  if(it.k==='pg'||it.k==='lub'){var p=clone(getPedidos().filter(function(y){return y.id===it.id;})[0]);if(!p)return false;
+    if(f){p.conf={legajo:f.legajo,nombre:f.nombre,cat:f.cat,cuando:f.cuando};if(it.k==='lub'){p.firmaGerente=f.firma;p.gerente=f.nombre;}delete p.devuelto;}else p.devuelto=dev;
+    p.historial=(p.historial||[]).concat([h]);p.actualizado=ahora;upsertPedido(p);if(!DEMO)queueAdd('pedido',p.id,{auth:authNow()});pedTmp=null;return true;}
+  return false;
+}
+function modalConformidad(it){
+  var u=me();if(!esFirmante(u,it.dist)){toast('No estás a cargo de la Gerencia de este distrito.');return;}
+  if(it.porLeg&&String(it.porLeg)===String(u.legajo)){toast('Este documento lo armaste o enviaste vos: la conformidad la tiene que dar otra persona (el Gerente u otro a cargo).');return;}
+  if(!tieneFirmaReg()){modalFirmaReg(function(){modalConformidad(it);});return;}
+  miFirmaData().then(function(data){
+    openModal('<h3>Firmar en conformidad</h3><dl class="dl"><dt>Documento</dt><dd>'+esc(it.titulo||'')+'</dd><dt>Distrito</dt><dd>'+esc(distName(it.dist))+'</dd></dl>'+
+      '<p>Al firmar confirmás que revisaste los datos que cargó el personal del distrito y que estás de acuerdo.</p>'+
+      '<div class="fslot"><b>'+esc(nombreFirma(u,it.dist))+'</b>'+(data?'<img class="firma-img" alt="Mi firma registrada" src="'+data+'">':'<p class="hint">Tu firma registrada se trae del servidor al sincronizar.</p>')+'</div>'+
+      '<div class="field"><label for="cfPw">'+(isA()?'Contraseña':'PIN')+'</label><input id="cfPw" type="password" inputmode="numeric" autocomplete="current-password"></div>'+
+      '<p class="hint" id="cfcMsg"></p><div class="row-end"><button class="ghost" type="button" id="cfcVer">Ver el documento</button><button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="cfcGo">Firmar en conformidad</button></div>',true);
+    $('#cfcVer').addEventListener('click',function(){verItem(it);});
+    $('#cfcGo').addEventListener('click',function(){var m=$('#cfcMsg');if(!data){m.textContent='No se encontró tu firma registrada en este equipo. Sincronizá o volvé a registrarla en Mi cuenta.';return;}
+      verificarClave(u,$('#cfPw').value).then(function(ok){if(!ok){m.textContent=(isA()?'Contraseña':'PIN')+' incorrecto.';return;}
+        var f={legajo:u.legajo,nombre:nombreFirma(u,it.dist),cat:u.cat,firma:data,cuando:new Date().toISOString(),aCargo:!esB1(u)};
+        if(aplicarConf(it,f,null)){closeModal();toast('Firmado en conformidad.');sync(false);render();}}).catch(function(e){m.textContent=e.message;});});
+  });
+}
+function modalDevolver(it){
+  var u=me();if(!esFirmante(u,it.dist))return;
+  openModal('<h3>Devolver con observación</h3><p class="hint">'+esc(it.titulo||'')+' · '+esc(distName(it.dist))+'. Le llega al personal del distrito para que lo corrija; cuando lo vuelvan a guardar o enviar, te aparece otra vez en «Para firmar».</p>'+
+    '<div class="field"><label for="dvM">¿Qué hay que corregir?</label><textarea id="dvM" rows="3" placeholder="Ejemplo: la existencia de la cisterna C3 no coincide con la medición; revisar el remito del 12/11"></textarea></div>'+
+    '<p class="hint" id="dvMsg"></p><div class="row-end"><button class="btn" data-close type="button">Cancelar</button><button class="btn primary" type="button" id="dvGo">Devolver</button></div>',true);
+  $('#dvGo').addEventListener('click',function(){var mo=$('#dvM').value.trim();if(!mo){$('#dvMsg').textContent='Escribí qué hay que corregir.';return;}
+    if(aplicarConf(it,null,{legajo:u.legajo,nombre:nombreFirma(u,it.dist),cuando:new Date().toISOString(),motivo:mo})){closeModal();toast('Devuelto al distrito con tu observación.');sync(false);render();}});
+}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-conf],[data-devol]');if(!b)return;
+  var v=(b.dataset.conf||b.dataset.devol).split('|'),it=itemDe(v[0],v[1],v[2]);if(!it){toast('No se encontró el documento.');return;}
+  if(b.dataset.conf)modalConformidad(it);else modalDevolver(it);});
+
+/* ---------- pestaña «Para firmar» ---------- */
+function viewFirmar(main){
+  var u=me(),ds=distFirma(u),all=docsFirma(),pend=all.filter(function(d){return !d.firmado&&!d.dev;}),dev=all.filter(function(d){return !d.firmado&&d.dev;}),hechos=all.filter(function(d){return d.firmado&&new Date()-new Date(d.firmado.cuando)<30*86400000;});
+  var K={inf:'Informe',res:'Resumen mensual',cf:'Control físico',pg:'Programa de gasoil',lub:'Lubricante'};
+  function fila(d,btn){return '<tr><td><span class="chip">'+K[d.k]+'</span></td><td class="wrap"><b>'+esc(d.titulo)+'</b></td><td>'+esc(D(d.dist).n)+'</td><td>'+(d.fecha?fFecha(d.fecha):'—')+'</td><td>'+esc(d.por||'—')+'</td><td class="acc">'+btn+'</td></tr>';}
+  var cab='<thead><tr><th>Tipo</th><th>Documento</th><th>Distrito</th><th>Fecha</th><th>Armado o enviado por</th><th></th></tr></thead>';
+  var sub=!esB1(u)&&u.subroga?'<div class="banner"><span>Estás <b>a cargo de la Gerencia Distrital</b> de '+esc(distName(u.subroga.dist))+(u.subroga.hasta?' hasta el '+fFecha(u.subroga.hasta):'')+'. Firmás como «a/c Gerencia Distrital». No podés dar conformidad a lo que armaste vos.</span></div>':'';
+  var fr=firmaRegLocal(u.legajo);
+  main.innerHTML='<div class="wrap wide panel"><div class="ptitle"><div><h1>Para firmar en conformidad</h1><p>'+esc(ds.map(distName).join(', '))+'. Revisás lo que arma tu personal y lo firmás, o lo devolvés con una observación para que lo corrijan.</p></div>'+
+    '<div class="toolbar"><button class="ghost" type="button" id="fiSync">Actualizar</button></div></div>'+sub+
+    '<div class="card block"><div class="row-end" style="justify-content:space-between;align-items:center"><h4 style="margin:0">Mi firma registrada</h4><button class="btn sec" type="button" id="fiReg">'+(tieneFirmaReg()?'Cambiar mi firma':'Registrar mi firma')+'</button></div>'+
+      (fr?'<img class="firma-img" alt="Mi firma registrada" src="'+fr+'" style="max-width:260px">':tieneFirmaReg()?'<p class="hint">Registrada en el servidor. Se trae a este equipo la primera vez que firmes.</p>':'<p class="hint">Todavía no registraste tu firma. Dibujala una vez y después firmás cada documento con tu '+(isA()?'contraseña':'PIN')+'.</p>')+'</div>'+
+    '<div class="card block"><h4>Pendientes de tu conformidad'+(pend.length?' <span class="badge">'+pend.length+'</span>':'')+'</h4>'+(pend.length?'<div class="tablewrap"><table>'+cab+'<tbody>'+pend.map(function(d){var key=d.k+'|'+(d.k==='res'?d.dist+'|'+d.mes:d.id);
+      return fila(d,'<button class="ghost small" type="button" data-fver="'+esc(key)+'">Ver</button> <button class="btn primary small" type="button" data-conf="'+esc(key)+'">Firmar en conformidad</button> <button class="ghost small" type="button" data-devol="'+esc(key)+'">Devolver</button>');}).join('')+'</tbody></table></div>':'<p class="empty">No tenés documentos pendientes.</p>')+'</div>'+
+    (dev.length?'<div class="card block"><h4>Devueltos · esperando la corrección del distrito</h4><div class="tablewrap"><table>'+cab+'<tbody>'+dev.map(function(d){var key=d.k+'|'+(d.k==='res'?d.dist+'|'+d.mes:d.id);return fila(d,'<small class="hint">'+esc(d.dev.motivo)+'</small> <button class="ghost small" type="button" data-fver="'+esc(key)+'">Ver</button>');}).join('')+'</tbody></table></div></div>':'')+
+    (hechos.length?'<div class="card block"><h4>Firmados en los últimos 30 días</h4><div class="tablewrap"><table>'+cab+'<tbody>'+hechos.map(function(d){var key=d.k+'|'+(d.k==='res'?d.dist+'|'+d.mes:d.id);return fila(d,'<span class="chip g">'+fFH(d.firmado.cuando)+'</span> <button class="ghost small" type="button" data-fver="'+esc(key)+'">Ver</button>');}).join('')+'</tbody></table></div></div>':'')+
+    '</div>';
+  $('#fiReg').addEventListener('click',function(){modalFirmaReg();});
+  $('#fiSync').addEventListener('click',function(){sync(true).then(function(){return traerFirmar(true);});});
+  main.addEventListener('click',function(e){var b=e.target.closest('[data-fver]');if(!b)return;var v=b.dataset.fver.split('|'),it=itemDe(v[0],v[1],v[2]);if(it)verItem(it);});
+}
+
+var firTraido=0;
+function traerFirmar(manual){
+  if(DEMO||!cfg.syncUrl||!navigator.onLine)return Promise.resolve();if(!manual&&Date.now()-firTraido<120000)return Promise.resolve();firTraido=Date.now();
+  var ds=distFirma(me()),m=todayISO().slice(0,7),ms=[m,mesAnt(m)],antes=JSON.stringify(docsFirma()),b=$('#fiSync');if(b){b.disabled=true;b.textContent='Trayendo…';}
+  var ch=pullPedidos(false);ds.forEach(function(d){ms.forEach(function(x){ch=ch.then(function(){return traerMes(d,x).catch(function(){});});});});
+  return ch.then(function(){if(VIEW!=='firmar')return;if(JSON.stringify(docsFirma())!==antes||manual)render();else{var b2=$('#fiSync');if(b2){b2.disabled=false;b2.textContent='Actualizar';}}});
+}
 
 /* =====================================================================
    CLIMA (Open-Meteo, sin clave) y serie diaria de consumo por distrito
@@ -3682,15 +3839,17 @@ function enviar(item){
     var rs=pd.oficina&&pd.oficina.respaldo,pre=Promise.resolve();
     if(rs&&rs.id&&!rs.url)pre=fotoGet(rs.id).then(function(data){if(!data)return;return postJSON({accion:'guardarFoto',id:rs.id,nombre:pd.id+'_respaldo',data:data}).then(function(res){var a=getPedidos();a.forEach(function(x){if(x.id===pd.id&&x.oficina&&x.oficina.respaldo)x.oficina.respaldo.url=res.url;});savePedidos(a);fotoDel(rs.id);});});
     return pre.then(function(){var pd2=getPedidos().filter(function(x){return x.id===item.id;})[0];return postJSON({accion:'guardarPedido',pedido:pd2,auth:item.auth});});}
+  if(item.k==='firmareg'){var fd=firmaRegLocal(item.id);if(!fd)return Promise.resolve();return postJSON({accion:'guardarFirmaReg',data:fd,auth:item.auth}).then(function(res){var a=getUsers();a.forEach(function(x){if(String(x.legajo)===String(item.id))x.firmaReg=res.url;});saveUsers(a);var id=idDrive(res.url);if(id)sset('cpt.firma.'+id,fd);});}
   if(item.k==='alta'){var al=getAltas().filter(function(x){return x.id===item.id;})[0];if(!al||al.demo)return Promise.resolve();return postJSON({accion:'guardarAlta',alta:al,auth:item.auth});}
   if(item.k==='op'){var op=getOPsAll().filter(function(x){return x.id===item.id;})[0];if(!op)return Promise.resolve();return postJSON({accion:'guardarOP',op:op,auth:item.auth});}
   if(item.k==='config'){return postJSON({accion:'guardarConfig',config:{bases:cfg.bases||{},distOv:cfg.distOv,tolL:cfg.tolL,tolP:cfg.tolP,minAut:cfg.minAut,fotoRemito:cfg.fotoRemito,fotoCaud:cfg.fotoCaud,minAntes:cfg.minAntes,horasTarde:cfg.horasTarde},auth:item.auth});}
   return Promise.resolve();
 }
 function pullConfig(){return getJSON({accion:'config'}).then(function(res){if(res.config){var c=res.config;if(!getQueue().some(function(x){return x.k==='config';})){['distOv','tolL','tolP','fotoRemito','fotoCaud','minAntes','horasTarde','minAut'].forEach(function(k){if(c[k]!=null)cfg[k]=c[k];});Object.keys(c.bases||{}).forEach(function(d){var nb=c.bases[d],lb=sget('cpt.base.'+d,null);if(!lb||!lb.ts||nb.ts>lb.ts){var vieja=!lb||!lb.ts||nb.ts>lb.ts;sset('cpt.base.'+d,nb);if(vieja&&lb&&lb.ts){saveTurnos(getTurnos().filter(function(r){return r.dist!==d||r.hist||skey(r)>=skey(nb);}));}}});cfg.bases=c.bases||{};saveCfg();}}}).catch(function(){});}
-function pullUsers(){return getJSON({accion:'usuarios'}).then(function(res){var pend=getQueue().filter(function(x){return x.k==='usuario';}).map(function(x){return String(x.id);}),loc=getUsers();
+function pullUsers(){var yo=me()?JSON.stringify([me().cat,me().subroga||null,me().dist,me().firmaReg||null]):null;return getJSON({accion:'usuarios'}).then(function(res){var pend=getQueue().filter(function(x){return x.k==='usuario';}).map(function(x){return String(x.id);}),loc=getUsers();
   var a=(res.usuarios||[]).map(function(u){return pend.indexOf(String(u.legajo))>=0?(loc.filter(function(x){return String(x.legajo)===String(u.legajo);})[0]||u):u;});
-  loc.forEach(function(u){if(pend.indexOf(String(u.legajo))>=0&&!a.some(function(x){return String(x.legajo)===String(u.legajo);}))a.push(u);});saveUsers(a);});}
+  loc.forEach(function(u){if(pend.indexOf(String(u.legajo))>=0&&!a.some(function(x){return String(x.legajo)===String(u.legajo);}))a.push(u);});saveUsers(a);
+  if(yo&&me()&&yo!==JSON.stringify([me().cat,me().subroga||null,me().dist,me().firmaReg||null])&&VIEW!=='turno'&&VIEW!=='editor')setTimeout(render,0);});}
 function sync(manual){
   if(DEMO){if(manual)toast('Modo demostración: no hay servidor. Conectalo desde la pantalla de ingreso.');updatePill();return Promise.resolve();}
   if(syncing)return Promise.resolve();
@@ -3731,7 +3890,7 @@ window.addEventListener('offline',updatePill);
 setInterval(function(){if(getQueue().length)sync(false);},120000);
 
 /* ---------- detalle de lo que falta enviar ---------- */
-var TIPOS_Q={alta:'ALTA de carga',turno:'Turno',informe:'Informe',usuario:'Usuario',cf:'Control físico',pedido:'Pedido',op:'Pedido YPF (OP)',config:'Configuración'};
+var TIPOS_Q={firmareg:'Firma registrada',alta:'ALTA de carga',turno:'Turno',informe:'Informe',usuario:'Usuario',cf:'Control físico',pedido:'Pedido',op:'Pedido YPF (OP)',config:'Configuración'};
 function nombreItem(x){var t=TIPOS_Q[x.k]||x.k,d='';
   if(x.k==='op'){var o=getOPsAll().filter(function(z){return z.id===x.id;})[0];if(o)d=o.nPedido+' · '+(typeof nomDist==='function'?nomDist(o.dist):o.dist);}
   else if(x.k==='pedido'){var pd=getPedidos().filter(function(z){return z.id===x.id;})[0];if(pd)d=(pd.tipo==='lub'?'lubricante':'programa semanal')+' · '+D(pd.dist).n+' · '+fFecha(pd.fecha);}
