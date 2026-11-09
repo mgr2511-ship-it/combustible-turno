@@ -479,6 +479,9 @@ td.rm-bad,.rm-bad{color:var(--danger);font-weight:600}
 .hcomp{grid-template-columns:24px minmax(84px,1fr) minmax(124px,1.15fr)}
 .hcomp input.num{min-width:0;width:100%;text-align:right;font-variant-numeric:tabular-nums}
 .hcomp select{min-width:0;width:100%;text-overflow:ellipsis;font-size:.88rem;padding-left:8px!important;padding-right:22px!important}
+.rm-ofi>.btn{align-self:flex-start;margin-top:4px}
+.rm-corr{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
+.rm-corr .btn{align-self:flex-start}
 </style>
 </head>
 <body>
@@ -4246,7 +4249,12 @@ function modalRemito(id,pre){
       '<div class="field"><label for="rmHS">Hora de salida</label><input id="rmHS" type="time" value="'+esc(r.hSal)+'"'+dis+'></div></div>'+
     '<div class="block"><h4>Cantidad a 15° por cisterna (L)</h4><p class="hint">Salida, pedido, entrega y litros son datos del remito PDF de YPF.</p><div class="rm-cist">'+cist+'<div class="field"><label>Total</label><output id="rmTot" class="rm-tot"></output></div></div></div>'+
     '<div class="block"><h4>Llegada</h4><div class="rm-cmp">'+
-      '<div class="card rm-ofi"><b>Llegada</b><p class="hint">La carga la oficina (columnas F y H del Excel, o fecha y hora de entrega del portal) y la declara el distrito en su turno.</p><div class="grid2"><input id="rmFL" type="date" aria-label="Fecha de llegada" value="'+esc(r.fLleg)+'"'+dis+'><input id="rmHL" type="time" aria-label="Hora de llegada" value="'+esc(r.hLleg)+'"'+dis+'></div></div>'+
+      '<div class="card rm-ofi"><b>Llegada</b><p class="hint">La carga la oficina (columnas F y H del Excel, o fecha y hora de entrega del portal) y la declara el distrito en su turno.</p><div class="grid2"><input id="rmFL" type="date" aria-label="Fecha de llegada" value="'+esc(r.fLleg)+'"'+dis+'><input id="rmHL" type="time" aria-label="Hora de llegada" value="'+esc(r.hLleg)+'"'+dis+'></div>'+
+        (ro?'<button class="btn small" type="button" id="rmCorr">Corregir llegada…</button>'+
+          '<div id="rmCorrBox" hidden class="rm-corr"><div class="grid2"><input id="rmCF" type="date" aria-label="Fecha de llegada correcta" value="'+esc(r.fLleg)+'"><input id="rmCH" type="time" aria-label="Hora de llegada correcta" value="'+esc(r.hLleg)+'"></div>'+
+          '<div class="field"><label for="rmCM">Motivo</label><textarea id="rmCM" rows="2" placeholder="Ej.: según la planilla de usina llegó el 08/03 a las 12:21"></textarea></div>'+
+          '<label class="rm-chk"><input type="checkbox" id="rmCT" checked> Corregir también el turno del distrito</label>'+
+          '<button class="btn primary small" type="button" id="rmCOk">Guardar corrección</button></div>':'')+'</div>'+
       '<div class="card" id="rmDecl"></div></div></div>'+
     '<div id="rmCru"></div>'+
     ((r.carga||r.transp)?'<p class="hint">'+(r.carga?'Carga en terminal (Guía de Carga): '+fFecha(r.carga.f)+' '+esc(r.carga.h||'')+'. ':'')+(r.transp?'Transporte: '+esc(r.transp)+'.':'')+'</p>':'')+
@@ -4299,6 +4307,19 @@ function modalRemito(id,pre){
   if($('#rmReab'))$('#rmReab').addEventListener('click',function(e){var b=e.currentTarget,box=$('#rmReabBox');if(box.hidden){box.hidden=false;b.textContent='Reabrir';$('#rmMot').focus();return;}
     var m=$('#rmMot').value.trim();if(m.length<5){msg.textContent='Escribí el motivo (para que quede registrado).';return;}
     var o=clone(orig);o.conf=null;remGuardar(o,'Reabierto',m);closeModal();modalRemito(o.id);});
+  /* corregir la llegada de un remito confirmado y, si se marca, mover o corregir el camión en el turno del distrito */
+  if($('#rmCorr'))$('#rmCorr').addEventListener('click',function(){var box=$('#rmCorrBox');box.hidden=!box.hidden;if(!box.hidden)$('#rmCH').focus();});
+  if($('#rmCOk'))$('#rmCOk').addEventListener('click',function(e){var b=e.currentTarget,f=$('#rmCF').value,h=$('#rmCH').value,m=$('#rmCM').value.trim();
+    if(!f||!h){msg.textContent='Completá la fecha y la hora correctas.';return;}
+    if(f===orig.fLleg&&h===orig.hLleg){msg.textContent='La fecha y la hora son las mismas que ya tiene.';return;}
+    if(m.length<5){msg.textContent='Escribí el motivo de la corrección.';return;}
+    var o=clone(orig);o.fLleg=f;o.hLleg=h;var sp=remSospecha(o);
+    if(sp&&!b.dataset.sp){b.dataset.sp='1';b.textContent='Guardar igual';msg.textContent=sp+' Si es correcto, tocá de nuevo.';return;}
+    var u=me();o.conf={nombre:u.nombre,legajo:u.legajo,ts:new Date().toISOString()};
+    remGuardar(o,'Llegada corregida',fFecha(orig.fLleg)+' '+orig.hLleg+' → '+fFecha(f)+' '+h+' · '+m);
+    var id=o.id;
+    if($('#rmCT').checked){var g=getRemAll().filter(function(x){return x.id===id;})[0];modalIgualar([g],function(){render();modalRemito(id);});}
+    else{closeModal();toast('Llegada corregida.');render();modalRemito(id);}});
 }
 
 /* ---------- lectura de archivos: remito PDF, captura del portal YPF, Guía de Carga ---------- */
@@ -4581,6 +4602,8 @@ function remPlanes(lista){var idx=camIndex(),map=mapTurnos(getTurnos());return l
 /** aplica los cambios a los turnos y los deja para enviar */
 function remAplicar(planes){
   var u=me(),ts=new Date().toISOString(),a=getTurnos(),by={},cons0={},toc={},corr={},porRem={};a.forEach(function(t){by[t.id]=t;});
+  /* si la limpieza automática sacó del equipo algún turno viejo mientras se revisaba, se vuelve a poner */
+  planes.forEach(function(p){[p.org,p.dest].forEach(function(t){if(t&&!by[t.id]){a.push(t);by[t.id]=t;}});});
   function tocar(t,ch,rem){if(cons0[t.id]==null)cons0[t.id]=t.consumo;t.ingresos=sum(t.camiones.map(function(c){return c.litros;}));t.consumo=r2(t.inicio+t.ingresos-t.total);
     t.ediciones=(t.ediciones||[]).concat([{cuando:ts,por:u.nombre+' ('+u.cat+')'+(t.hist?' · modo histórico':''),cambios:ch,remito:rem}]);toc[t.id]=t;(corr[t.id]=corr[t.id]||[]).push.apply(corr[t.id],ch);}
   function ordenar(t){t.camiones.sort(function(x,y){return (x.hora||'')<(y.hora||'')?-1:1;});}
