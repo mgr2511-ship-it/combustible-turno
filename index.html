@@ -11,31 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<style>html,body{height:100%}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}/* ---------- Control de remitos ---------- */
-.banner.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
-.banner.err{background:var(--danger-bg);color:var(--danger);border-color:transparent}
-.rm-acc .rm-file{display:inline-flex;align-items:center;cursor:pointer}
-.rm-tab tbody tr{cursor:pointer}.rm-tab tbody tr:hover td{background:var(--field)}
-td.rm-bad,.rm-bad{color:var(--danger);font-weight:600}
-.stat.rm-st-bad b{color:var(--danger)}
-.rm-cist{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
-.rm-tot{display:block;font:700 1.05rem var(--f-body);padding:8px 0;font-variant-numeric:tabular-nums}
-.rm-cmp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.rm-cmp .card{display:flex;flex-direction:column;gap:6px}
-.rm-cmp .card p{margin:0}
-.rm-ofi{border:2px solid var(--accent)!important}
-.rm-big{font:700 1.1rem var(--f-body)}
-.rm-hist summary{cursor:pointer;font-weight:600}
-.rm-hist ul{margin:6px 0 0;padding-left:18px;font-size:.85rem}
-.rm-rev input:not([type=checkbox]),.rm-rev select{min-width:120px}
-.rm-rev input[type=checkbox]{width:18px;height:18px}
-.rm-rev tr.rm-chg td{background:var(--warn-bg)}
-.rm-chk{display:flex;gap:8px;align-items:center}
-@media (max-width:700px){.rm-cist{grid-template-columns:repeat(4,minmax(0,1fr))}.rm-cmp{grid-template-columns:1fr}}
-.rm-aviso .btn{white-space:nowrap}
-.rm-rev td{white-space:normal}
-.stat.rm-st-btn{cursor:pointer}.stat.rm-st-btn:hover{border-color:var(--danger)}
-</style>
+<style>html,body{height:100%}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 <title>Control de Usina</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
@@ -474,6 +450,35 @@ body:has(.login){background:var(--brand)}
 @media (max-width:560px){.aslot{font-size:.55rem;padding:4px 0}.agrid{gap:2px}.aday{padding:2px}}
 .aslot .as,.as-hint{display:none}
 @media (max-width:560px){.aslot .al{display:none}.aslot .as{display:inline}.as-hint{display:inline}.aslot{font-size:.6rem;white-space:nowrap}.adn{font-size:.78rem}}
+/* ---------- Control de remitos ---------- */
+.banner.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.banner.err{background:var(--danger-bg);color:var(--danger);border-color:transparent}
+.rm-acc .rm-file{display:inline-flex;align-items:center;cursor:pointer}
+.rm-tab tbody tr{cursor:pointer}.rm-tab tbody tr:hover td{background:var(--field)}
+td.rm-bad,.rm-bad{color:var(--danger);font-weight:600}
+.stat.rm-st-bad b{color:var(--danger)}
+.rm-cist{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.rm-tot{display:block;font:700 1.05rem var(--f-body);padding:8px 0;font-variant-numeric:tabular-nums}
+.rm-cmp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.rm-cmp .card{display:flex;flex-direction:column;gap:6px}
+.rm-cmp .card p{margin:0}
+.rm-ofi{border:2px solid var(--accent)!important}
+.rm-big{font:700 1.1rem var(--f-body)}
+.rm-hist summary{cursor:pointer;font-weight:600}
+.rm-hist ul{margin:6px 0 0;padding-left:18px;font-size:.85rem}
+.rm-rev input:not([type=checkbox]),.rm-rev select{min-width:120px}
+.rm-rev input[type=checkbox]{width:18px;height:18px}
+.rm-rev tr.rm-chg td{background:var(--warn-bg)}
+.rm-chk{display:flex;gap:8px;align-items:center}
+@media (max-width:700px){.rm-cist{grid-template-columns:repeat(4,minmax(0,1fr))}.rm-cmp{grid-template-columns:1fr}}
+.rm-aviso .btn{white-space:nowrap}
+.rm-rev td{white-space:normal}
+.stat.rm-st-btn{cursor:pointer}.stat.rm-st-btn:hover{border-color:var(--danger)}
+/* carga histórica: que se vean los litros de cada cisterna */
+.hcomps{grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+.hcomp{grid-template-columns:24px minmax(84px,1fr) minmax(124px,1.15fr)}
+.hcomp input.num{min-width:0;width:100%;text-align:right;font-variant-numeric:tabular-nums}
+.hcomp select{min-width:0;width:100%;text-overflow:ellipsis;font-size:.88rem;padding-left:8px!important;padding-right:22px!important}
 </style>
 </head>
 <body>
@@ -2431,7 +2436,7 @@ function pintarHT(){pintarHTBase();if(isA())remAvisoHT();}
 function pintarHTBase(){
   var ci=D(HT.dist).cist,ds=usinas().filter(function(x){return x!==HT.dist;}),c=htCalc(),aj=HT.aj||{litros:null,motivo:'',por:null};
   var camHTML=HT.cams.map(function(t,i){var cs='';for(var k=0;k<NCAM;k++){var e=t.est[k]||((t.cist[k]||0)>0?'d':'v');
-      cs+='<div class="hcomp"><span>C'+(k+1)+'</span><input class="num" data-hc="'+i+'_'+k+'" value="'+fmt(t.cist[k])+'"'+(e!=='d'?' disabled':'')+'><select data-he="'+i+'_'+k+'">'+Object.keys(EST_CAM).map(function(x){return '<option value="'+x+'"'+(e===x?' selected':'')+'>'+EST_CAM[x]+'</option>';}).join('')+'</select>'+
+      cs+='<div class="hcomp"><span>C'+(k+1)+'</span><input class="num" data-hc="'+i+'_'+k+'" value="'+fmt(t.cist[k])+'"'+(e!=='d'?' disabled':'')+'><select data-he="'+i+'_'+k+'">'+Object.keys(EST_CAM).map(function(x){return '<option value="'+x+'"'+(e===x?' selected':'')+' title="'+EST_CAM[x]+'">'+({d:'Descargada',r:'Rechazada',v:'Vacía',o:'Derivada'})[x]+'</option>';}).join('')+'</select>'+
         (e==='o'?'<select data-hd="'+i+'_'+k+'"><option value="">¿Distrito?</option>'+ds.map(function(x){return '<option value="'+x+'"'+(t.dest[k]===x?' selected':'')+'>'+esc(distName(x))+'</option>';}).join('')+'</select>':'')+'</div>';}
     return '<div class="hcam"><div class="form-grid"><div class="field"><label>Hora</label><input type="time" data-hk="hora" data-hi="'+i+'" value="'+esc(t.hora)+'"></div><div class="field"><label>Remito</label><input data-hk="remito" data-hi="'+i+'" value="'+esc(t.remito)+'" placeholder="1122-00000000"></div>'+
       '<div class="field"><label>Total del camión (L)</label><output>'+fmt(sum(t.cist.filter(function(v,k){return (t.est[k]||'d')==='d';})))+'</output></div><div class="field"><label class="check"><input type="checkbox" data-hk="parcial" data-hi="'+i+'"'+(t.parcial?' checked':'')+'> Descarga parcial</label></div>'+
