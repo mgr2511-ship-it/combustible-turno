@@ -16,11 +16,11 @@
 .banner.err{background:var(--danger-bg);color:var(--danger);border-color:transparent}
 .rm-acc .rm-file{display:inline-flex;align-items:center;cursor:pointer}
 .rm-tab tbody tr{cursor:pointer}.rm-tab tbody tr:hover td{background:var(--field)}
-td.rm-bad{color:var(--danger);font-weight:600}
+td.rm-bad,.rm-bad{color:var(--danger);font-weight:600}
 .stat.rm-st-bad b{color:var(--danger)}
 .rm-cist{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
 .rm-tot{display:block;font:700 1.05rem var(--f-body);padding:8px 0;font-variant-numeric:tabular-nums}
-.rm-cmp{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rm-cmp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .rm-cmp .card{display:flex;flex-direction:column;gap:6px}
 .rm-cmp .card p{margin:0}
 .rm-ofi{border:2px solid var(--accent)!important}
@@ -32,6 +32,8 @@ td.rm-bad{color:var(--danger);font-weight:600}
 .rm-rev tr.rm-chg td{background:var(--warn-bg)}
 .rm-chk{display:flex;gap:8px;align-items:center}
 @media (max-width:700px){.rm-cist{grid-template-columns:repeat(4,minmax(0,1fr))}.rm-cmp{grid-template-columns:1fr}}
+.rm-aviso .btn{white-space:nowrap}
+.rm-rev td{white-space:normal}
 </style>
 <title>Control de Usina</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1741,7 +1743,8 @@ function modalDia(dist,f){
 }
 
 /* ---------- detalle de un turno ---------- */
-function modalTurno(id){
+function modalTurno(id){modalTurnoBase(id);if(isA())remAvisoTurno(id);}
+function modalTurnoBase(id){
   var all=getTurnos(),r=all.filter(function(x){return x.id===id;})[0];if(!r)return;
   var map=mapTurnos(all),c=controlDe(r,map,all),ci=D(r.dist).cist,cn=r.cistN||ci.map(function(x){return x.n;}),ti=telIdx(r.dist),u=me();
   var conEx=!!(r.existencias&&r.existencias.length);
@@ -2418,11 +2421,13 @@ function modalHistTurno(dist,f,t){
   if(r&&!r.hist){toast('Ese turno lo cerró un operador: se corrige con un usuario B («Corregir turno»).');return;}
   HT={dist:dist,fecha:f,turno:t,existe:!!r,modo:r?(r.existencias&&r.existencias.length?'tanques':'total'):'tanques',inicio:r?r.inicio:(pr?pr.total:null),
     ex:r&&r.existencias&&r.existencias.length?r.existencias.slice():ci.map(function(){return null;}),total:r?r.total:null,consDecl:r&&r.consDecl!=null?r.consDecl:null,medDecl:r&&r.medDecl!=null?r.medDecl:null,
-    aj:r&&r.ajusteDia?clone(r.ajusteDia):null,obs:r?r.observacion||'':'',cams:r?r.camiones.map(function(c){return {hora:c.hora,remito:c.remito,litros:c.litros,cist:(c.cisternas||[]).slice(),est:camEstados(c),dest:(c.destinos||[]).slice(),parcial:!!c.parcial,motivo:c.motivo||''};}):[]};
+    aj:r&&r.ajusteDia?clone(r.ajusteDia):null,obs:r?r.observacion||'':'',cams:r?r.camiones.map(function(c){return {hora:c.hora,remito:c.remito,litros:c.litros,cist:(c.cisternas||[]).slice(),est:camEstados(c),dest:(c.destinos||[]).slice(),parcial:!!c.parcial,motivo:c.motivo||'',op:c.op||'',entrega:c.entrega||'',fecha:c.fecha||''};}):[]};
+  if(!r){var rc=remDeSlot(dist,f,t);if(rc.length)HT.cams=rc.map(function(x){return htDesdeRem(x,null);});}
   pintarHT();
 }
 function htCalc(){var ing=sum(HT.cams.map(function(c){return c.litros;})),tot=HT.modo==='tanques'?(HT.ex.every(function(v){return v!=null;})?sum(HT.ex):null):HT.total;return {ing:ing,tot:tot,cons:HT.inicio!=null&&tot!=null?r2(HT.inicio+ing-tot):null};}
-function pintarHT(){
+function pintarHT(){pintarHTBase();if(isA())remAvisoHT();}
+function pintarHTBase(){
   var ci=D(HT.dist).cist,ds=usinas().filter(function(x){return x!==HT.dist;}),c=htCalc(),aj=HT.aj||{litros:null,motivo:'',por:null};
   var camHTML=HT.cams.map(function(t,i){var cs='';for(var k=0;k<NCAM;k++){var e=t.est[k]||((t.cist[k]||0)>0?'d':'v');
       cs+='<div class="hcomp"><span>C'+(k+1)+'</span><input class="num" data-hc="'+i+'_'+k+'" value="'+fmt(t.cist[k])+'"'+(e!=='d'?' disabled':'')+'><select data-he="'+i+'_'+k+'">'+Object.keys(EST_CAM).map(function(x){return '<option value="'+x+'"'+(e===x?' selected':'')+'>'+EST_CAM[x]+'</option>';}).join('')+'</select>'+
@@ -2475,7 +2480,7 @@ function guardarHT(){
   var a=getTurnos(),id=recId(HT.dist,HT.fecha,HT.turno),idx=-1;a.forEach(function(x,i){if(x.id===id)idx=i;});var old=idx>=0?a[idx]:null;
   var rec=Object.assign(old?clone(old):{},{id:id,dist:HT.dist,distrito:D(HT.dist).n,fecha:HT.fecha,turno:HT.turno,horario:TURNOS[HT.turno],inicio:HT.inicio,ingresos:k.ing,consumo:k.cons,
     existencias:HT.modo==='tanques'?HT.ex.slice():[],cistN:HT.modo==='tanques'?ci.map(function(x){return x.n;}):[],total:k.tot,observacion:HT.obs.trim(),consDecl:HT.consDecl,
-    camiones:HT.cams.map(function(c){return {hora:c.hora,remito:c.remito,litros:c.litros,op:'',entrega:'',fecha:'',cisternas:c.cist.map(function(v,q){return (c.est[q]||'d')==='d'?(v||0):0;}),estados:c.est.slice(),destinos:c.dest.slice(),foto:null,parcial:!!c.parcial,motivo:c.motivo||''};})});
+    camiones:HT.cams.map(function(c){return {hora:c.hora,remito:c.remito,litros:c.litros,op:c.op||'',entrega:c.entrega||'',fecha:c.fecha||'',cisternas:c.cist.map(function(v,q){return (c.est[q]||'d')==='d'?(v||0):0;}),estados:c.est.slice(),destinos:c.dest.slice(),foto:null,parcial:!!c.parcial,motivo:c.motivo||''};})});
   if(HT.turno===1){rec.medDecl=HT.medDecl;if(HT.aj&&(HT.aj.litros!=null||HT.aj.propuesto!=null))rec.ajusteDia=clone(HT.aj);else delete rec.ajusteDia;}
   if(!old){Object.assign(rec,{recibe:'',grupos:[],servicio:null,anom:null,fotoCaud:null,legajo:ROBOT.legajo,aclaracion:ROBOT.nombre,firma:null,cerrado:null,dispositivo:deviceId,ediciones:[],solicitudes:[],gps:null,hist:Object.assign({modo:HT.modo,fuente:'Carga manual'},histMeta())});}
   else{var ch=diffRec(old,rec);if(old.consDecl!==rec.consDecl)ch.push('Consumo declarado '+fmt(old.consDecl)+' → '+fmt(rec.consDecl));if(JSON.stringify(old.ajusteDia||null)!==JSON.stringify(rec.ajusteDia||null))ch.push('Corrección del día modificada');
@@ -4095,7 +4100,10 @@ function remCruce(r,idx){
   return {st:d.length?'dif':'ok',dif:d,c:c,der:der,tot:tot};
 }
 function remEstado(r){return r.conf?'conf':(r.fLleg&&r.hLleg?'pend':'sin');}
-var REM_EST={conf:'<span class="chip g">Confirmado</span>',pend:'<span class="chip y">Por confirmar</span>',sin:'<span class="chip">Sin llegada</span>'};
+/** confirmado a mano: solo se cambia reabriéndolo. Lo confirmado automáticamente (dato de YPF) se puede actualizar desde el Excel o el portal */
+function remBloq(r){return !!(r&&r.conf&&!r.conf.auto);}
+function confAuto(fuente){var u=me();return {nombre:u.nombre,legajo:u.legajo,ts:new Date().toISOString(),auto:true,fuente:fuente};}
+var REM_EST={confA:'<span class="chip g">YPF</span>',conf:'<span class="chip g">Confirmado</span>',pend:'<span class="chip y">Por confirmar</span>',sin:'<span class="chip">Sin llegada</span>'};
 var REM_CRU={ok:'<span class="chip g">Coincide</span>',dif:'<span class="chip r">Diferencia</span>',nodecl:'<span class="chip y">El distrito no lo cargó</span>',nodata:'<span class="chip">Sin datos del distrito</span>'};
 
 /* ---------- pantalla ---------- */
@@ -4119,21 +4127,22 @@ function remFiltrados(idx){var q=normTxt(remF.q).replace(/\s/g,'');
 }
 function viewRemitos(main){
   if(!isA()){main.innerHTML='<div class="wrap panel"><p class="empty">Solo la categoría A ve el control de remitos.</p></div>';return;}
+  remMigrar();
   var idx=camIndex(),todos=getRemitos(),lista=remFiltrados(idx);
   var meses={};meses[todayISO().slice(0,7)]=1;if(remF.mes)meses[remF.mes]=1;todos.forEach(function(r){var m=(r.fSal||r.fLleg||'').slice(0,7);if(m)meses[m]=1;});
   var mesesL=Object.keys(meses).sort().reverse();
   var n={tot:lista.length,lit:0,sin:0,pend:0,conf:0,ok:0,dif:0,nodecl:0};
   var cru={};lista.forEach(function(r){var c=remCruce(r,idx);cru[r.id]=c;n[remEstado(r)]++;if(n[c.st]!=null)n[c.st]++;n.lit+=r.total||0;});
-  var cargando=REM_CAM.cargando;
+  var cargando=REM_CAM.cargando,igu=lista.filter(function(r){return r.conf&&(cru[r.id].st==='dif'||cru[r.id].st==='nodecl');});
   var rows=lista.map(function(r){var c=cru[r.id],dc=c.c;
     return '<tr data-rm="'+r.id+'" class="rm-row">'+
       '<td>'+(r.fSal?fFecha(r.fSal):'—')+'<br><small class="hint">'+esc(r.hSal||'')+'</small></td>'+
       '<td>'+esc(D(r.dist)?D(r.dist).n:r.dist||'—')+'</td>'+
       '<td><b>'+esc(r.remito)+'</b><br><small class="hint">Ped. '+esc(r.pedido||'—')+' · Ent. '+esc(r.entrega||'—')+'</small></td>'+
       '<td class="n">'+(r.total!=null?fmt(r.total):'—')+'</td>'+
-      '<td>'+(r.fLleg?fFecha(r.fLleg):'—')+'<br><small class="hint">'+esc(r.hLleg||'')+(r.ypf&&(r.ypf.f!==r.fLleg||r.ypf.h!==r.hLleg)?' · portal '+esc(fFecha(r.ypf.f).slice(0,5)+' '+(r.ypf.h||'')):'')+'</small></td>'+
+      '<td>'+(r.fLleg?fFecha(r.fLleg):'—')+'<br><small class="hint">'+esc(r.hLleg||'')+'</small></td>'+
       '<td'+(c.st==='dif'?' class="rm-bad"':'')+'>'+(dc?fFecha(dc.fecha)+'<br><small class="hint">'+esc(dc.hora||'—')+' · '+fmt(c.tot)+' L</small>':'—')+'</td>'+
-      '<td class="wrap">'+REM_EST[remEstado(r)]+' '+REM_CRU[c.st]+'</td></tr>';}).join('');
+      '<td class="wrap">'+(r.conf&&r.conf.auto?REM_EST.confA:REM_EST[remEstado(r)])+' '+REM_CRU[c.st]+'</td></tr>';}).join('');
   /* camiones cargados por los distritos que no figuran en el control */
   var faltan=[];if(!remF.q){var ya={};getRemitos().forEach(function(r){ya[r.dist+'|'+r.remito]=1;});
     Object.keys(idx).forEach(function(k){if(ya[k])return;idx[k].forEach(function(c){if(remF.mes&&c.fecha.slice(0,7)!==remF.mes)return;if(remF.dist&&c.dist!==remF.dist)return;faltan.push(c);});});
@@ -4143,7 +4152,7 @@ function viewRemitos(main){
     '<div class="field"><label for="rmDist">Distrito</label><select id="rmDist"><option value="">Todos</option>'+usinas().map(function(d){return '<option value="'+d+'"'+(d===remF.dist?' selected':'')+'>'+esc(D(d).n)+'</option>';}).join('')+'</select></div>'+
     '<div class="field"><label for="rmEst">Estado</label><select id="rmEst">'+[['','Todos'],['sin','Sin llegada'],['pend','Por confirmar'],['conf','Confirmados'],['dif','Con diferencias'],['nodecl','El distrito no lo cargó']].map(function(o){return '<option value="'+o[0]+'"'+(o[0]===remF.est?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></div>'+
     '<div class="field"><label for="rmQ">Buscar</label><input id="rmQ" inputmode="numeric" autocomplete="off" placeholder="Remito, pedido o entrega" value="'+esc(remF.q)+'"></div></div></div>'+
-    '<div class="row-end rm-acc"><button class="ghost" type="button" id="rmSync"'+(cargando?' disabled':'')+'>'+(cargando?'Trayendo…':'Actualizar')+'</button><button class="ghost" type="button" id="rmXlsOut">Descargar Excel</button>'+
+    '<div class="row-end rm-acc">'+(igu.length?'<button class="btn" type="button" id="rmIgu" title="Corrige los turnos para que coincidan con los remitos confirmados">Igualar turnos ('+igu.length+')</button>':'')+'<button class="ghost" type="button" id="rmSync"'+(cargando?' disabled':'')+'>'+(cargando?'Trayendo…':'Actualizar')+'</button><button class="ghost" type="button" id="rmXlsOut">Descargar Excel</button>'+
       '<label class="ghost rm-file">Importar Excel<input type="file" id="rmXlsIn" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label>'+
       '<label class="btn rm-file">Subir remitos y capturas<input type="file" id="rmArch" accept="application/pdf,image/*" multiple hidden></label>'+
       '<button class="btn primary" type="button" id="rmNuevo">Nuevo remito</button></div>'+
@@ -4151,7 +4160,7 @@ function viewRemitos(main){
       '<div class="stat"><b>'+n.sin+'</b><span>Sin llegada</span></div><div class="stat"><b>'+n.pend+'</b><span>Por confirmar</span></div><div class="stat"><b>'+n.conf+'</b><span>Confirmados</span></div>'+
       '<div class="stat"><b>'+n.ok+'</b><span>Coinciden con el distrito</span></div><div class="stat'+(n.dif?' rm-st-bad':'')+'"><b>'+n.dif+'</b><span>Con diferencias</span></div><div class="stat"><b>'+n.nodecl+'</b><span>El distrito no lo cargó</span></div></div>'+
     (!DEMO&&!rangoCubre(remRango().desde,remRango().hasta)&&!cargando&&REM_CAM.errTs?'<p class="banner warn"><span>Todavía no se trajeron los camiones que declararon los distritos: el cruce aparece como «Sin datos del distrito». Tocá <b>Actualizar</b>.</span></p>':'')+
-    (lista.length?'<div class="tablewrap"><table class="rm-tab"><thead><tr><th>Salida</th><th>Distrito</th><th>Remito</th><th>Litros a 15°</th><th>Llegada (control)</th><th>Declaró el distrito</th><th>Estado</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<p class="empty">'+(todos.length?'No hay remitos con estos filtros.':'Todavía no hay remitos. Importá el Excel «CONTROL DE REMITOS», subí archivos o cargá uno nuevo.')+'</p>')+
+    (lista.length?'<div class="tablewrap"><table class="rm-tab"><thead><tr><th>Salida</th><th>Distrito</th><th>Remito</th><th>Litros a 15°</th><th>Llegada YPF</th><th>Declaró el distrito</th><th>Estado</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<p class="empty">'+(todos.length?'No hay remitos con estos filtros.':'Todavía no hay remitos. Importá el Excel «CONTROL DE REMITOS», subí archivos o cargá uno nuevo.')+'</p>')+
     (faltan.length?'<div class="card block"><h4>Camiones que cargó el distrito y no están en el control ('+faltan.length+')</h4><p class="hint">El operador declaró estos remitos en su turno, pero no figuran en esta lista. Agregalos para controlarlos.</p><div class="tablewrap"><table><thead><tr><th>Ingreso</th><th>Distrito</th><th>Remito</th><th>Litros</th><th>Cargó</th><th></th></tr></thead><tbody>'+
       faltan.map(function(c,i){return '<tr><td>'+fFecha(c.fecha)+' '+esc(c.hora)+'</td><td>'+esc(D(c.dist)?D(c.dist).n:c.dist)+'</td><td>'+esc(c.remito)+'</td><td class="n">'+fmt(c.litros)+'</td><td>'+esc(c.por||'')+'</td><td><button class="ghost small" type="button" data-rmadd="'+i+'">Agregar al control</button></td></tr>';}).join('')+'</tbody></table></div></div>':'')+
     '</div>';
@@ -4160,6 +4169,7 @@ function viewRemitos(main){
   $('#rmEst').addEventListener('change',function(e){remF.est=e.target.value;render();});
   var qt;$('#rmQ').addEventListener('input',function(e){clearTimeout(qt);qt=setTimeout(function(){remF.q=e.target.value.trim();render();},350);});
   $('#rmSync').addEventListener('click',function(){if(DEMO){toast('Modo demostración: no hay servidor.');return;}remTraido=0;REM_CAM.rangos=[];REM_CAM.errTs=0;sync(false);remAuto();});
+  if($('#rmIgu'))$('#rmIgu').addEventListener('click',function(){modalIgualar(igu);});
   $('#rmNuevo').addEventListener('click',function(){modalRemito(null,remF.dist?{dist:remF.dist}:null);});
   $('#rmXlsOut').addEventListener('click',exportarRemitos);
   $('#rmXlsIn').addEventListener('change',function(e){var f=e.target.files[0];e.target.value='';if(f)importarExcelRem(f);});
@@ -4169,13 +4179,20 @@ function viewRemitos(main){
       modalRemito(null,{dist:c.dist,remito:remNorm(c.remito),fLleg:c.fecha,hLleg:c.hora,cist:ci,obs:'Agregado desde el turno del distrito: verificá los litros con el remito.'});}});
 }
 
+/* lo importado antes de esta versión (llegada del Excel o del portal sin confirmar) pasa a confirmado como dato de YPF */
+function remMigrar(){var ACC=/^(Importado del Excel|Actualizado desde Excel|Cargado desde archivo|Datos de archivo)$/,lista=[];
+  getRemitos().forEach(function(r){var o=null;if(!r.fLleg&&r.ypf&&r.ypf.f&&r.ypf.h){o=clone(r);o.fLleg=r.ypf.f;o.hLleg=r.ypf.h;}
+    var x=o||r;if(!x.conf&&x.fLleg&&x.hLleg&&(x.hist||[]).length&&x.hist.every(function(h){return ACC.test(h.acc);})){o=o||clone(r);o.conf=confAuto(x.hist.some(function(h){return /Excel/.test(h.acc);})?'Excel':'Portal YPF');}
+    if(o)lista.push({r:o,acc:'Confirmado automáticamente',det:'llegada tomada de YPF'});});
+  if(lista.length)remGuardarVarios(lista);}
+
 /* ---------- ficha del remito ---------- */
 function modalRemito(id,pre){
   var orig=id?getRemAll().filter(function(x){return x.id===id;})[0]:null;if(id&&!orig)return;
   var r=orig?clone(orig):Object.assign(nuevoRem(),pre||{}),ro=!!r.conf,dis=ro?' disabled':'';
   var cist='';for(var k=0;k<NCAM;k++)cist+='<div class="field"><label for="rmC'+k+'">00'+(k+1)+'</label><input id="rmC'+k+'" inputmode="decimal" value="'+(r.cist[k]!=null?esc(r.cist[k]):'')+'"'+dis+'></div>';
   openModal('<h3>'+(orig?'Remito '+esc(r.remito):'Nuevo remito')+'</h3>'+
-    (ro?'<p class="banner ok"><span>Llegada confirmada por <b>'+esc(r.conf.nombre)+'</b> el '+fFH(r.conf.ts)+'. Para cambiar algo, reabrilo con el motivo.</span></p>':'')+
+    (ro?'<p class="banner ok"><span>'+(r.conf.auto?'Llegada tomada de YPF ('+esc(r.conf.fuente||'Excel')+'), cargada por <b>'+esc(r.conf.nombre)+'</b> el '+fFH(r.conf.ts)+'.':'Llegada confirmada por <b>'+esc(r.conf.nombre)+'</b> el '+fFH(r.conf.ts)+'.')+' Para cambiar algo, reabrilo con el motivo.</span></p>':'')+
     '<div class="form-grid rm-f">'+
       '<div class="field"><label for="rmD">Distrito</label><select id="rmD"'+dis+'><option value="">Elegí…</option>'+usinas().map(function(d){return '<option value="'+d+'"'+(d===r.dist?' selected':'')+'>'+esc(D(d).n)+'</option>';}).join('')+'</select></div>'+
       '<div class="field"><label for="rmR">Remito</label><input id="rmR" inputmode="numeric" placeholder="1122-00000000" value="'+esc(r.remito)+'"'+dis+'></div>'+
@@ -4185,9 +4202,8 @@ function modalRemito(id,pre){
       '<div class="field"><label for="rmHS">Hora de salida</label><input id="rmHS" type="time" value="'+esc(r.hSal)+'"'+dis+'></div></div>'+
     '<div class="block"><h4>Cantidad a 15° por cisterna (L)</h4><div class="rm-cist">'+cist+'<div class="field"><label>Total</label><output id="rmTot" class="rm-tot"></output></div></div></div>'+
     '<div class="block"><h4>Llegada</h4><div class="rm-cmp">'+
-      '<div class="card"><b>Portal YPF</b><p class="hint">«Fecha de entrega» de la captura del portal.</p><div class="grid2"><input id="rmYF" type="date" aria-label="Fecha portal" value="'+esc(r.ypf?r.ypf.f:'')+'"'+dis+'><input id="rmYH" type="time" aria-label="Hora portal" value="'+esc(r.ypf?r.ypf.h:'')+'"'+dis+'></div>'+(ro?'':'<button class="ghost small" type="button" id="rmUsaY">Usar como llegada</button>')+'</div>'+
-      '<div class="card" id="rmDecl"></div>'+
-      '<div class="card rm-ofi"><b>Llegada del control</b><p class="hint">Es la que se confirma.</p><div class="grid2"><input id="rmFL" type="date" aria-label="Fecha de llegada" value="'+esc(r.fLleg)+'"'+dis+'><input id="rmHL" type="time" aria-label="Hora de llegada" value="'+esc(r.hLleg)+'"'+dis+'></div></div></div></div>'+
+      '<div class="card rm-ofi"><b>Llegada YPF</b><p class="hint">Columna F y H del Excel, o «Fecha de entrega» y «Hora» del portal YPF.</p><div class="grid2"><input id="rmFL" type="date" aria-label="Fecha de llegada" value="'+esc(r.fLleg)+'"'+dis+'><input id="rmHL" type="time" aria-label="Hora de llegada" value="'+esc(r.hLleg)+'"'+dis+'></div></div>'+
+      '<div class="card" id="rmDecl"></div></div></div>'+
     '<div id="rmCru"></div>'+
     ((r.carga||r.transp)?'<p class="hint">'+(r.carga?'Carga en terminal (Guía de Carga): '+fFecha(r.carga.f)+' '+esc(r.carga.h||'')+'. ':'')+(r.transp?'Transporte: '+esc(r.transp)+'.':'')+'</p>':'')+
     '<div class="field"><label for="rmObs">Observaciones</label><textarea id="rmObs" rows="2"'+dis+'>'+esc(r.obs||'')+'</textarea></div>'+
@@ -4199,11 +4215,11 @@ function modalRemito(id,pre){
   var msg=$('#rmMsg');
   function leer(){var o=clone(r);o.dist=$('#rmD').value;o.remito=remNorm($('#rmR').value)||$('#rmR').value.trim();o.pedido=soloDig($('#rmP').value);o.entrega=soloDig($('#rmE').value);
     o.fSal=$('#rmFS').value;o.hSal=$('#rmHS').value;for(var k=0;k<NCAM;k++)o.cist[k]=remLit($('#rmC'+k).value);o.total=remTotal(o.cist);
-    o.fLleg=$('#rmFL').value;o.hLleg=$('#rmHL').value;var yf=$('#rmYF').value,yh=$('#rmYH').value;o.ypf=yf||yh?Object.assign({},r.ypf||{},{f:yf,h:yh}):null;o.obs=$('#rmObs').value.trim();return o;}
+    o.fLleg=$('#rmFL').value;o.hLleg=$('#rmHL').value;o.obs=$('#rmObs').value.trim();return o;}
   function pintar(){var o=leer();$('#rmTot').textContent=o.total!=null?fmt(o.total)+' L':'—';
     var c=remCruce(o,camIndex()),dc=c.c;
-    $('#rmDecl').innerHTML='<b>Declaró el distrito</b>'+(dc?'<p class="hint">Turno '+esc(slotLabel({fecha:dc.fecha,turno:dc.turno}))+(dc.por?' · '+esc(dc.por):'')+'</p><p class="rm-big">'+fFecha(dc.fecha)+' · '+esc(dc.hora||'—')+'</p><p class="hint">'+fmt(c.tot)+' L a 15°</p>'+(ro?'':'<button class="ghost small" type="button" id="rmUsaD">Usar como llegada</button>'):'<p class="hint">'+(c.st==='nodecl'?'El distrito todavía no cargó este remito en ningún turno.':'Sin datos del distrito para esta fecha (tocá «Actualizar» en la pantalla de Remitos).')+'</p>');
-    var u=$('#rmUsaD');if(u)u.addEventListener('click',function(){$('#rmFL').value=dc.fecha;$('#rmHL').value=dc.hora;pintar();});
+    $('#rmDecl').innerHTML='<b>Declaró el distrito</b>'+(dc?'<p class="hint">Turno '+esc(slotLabel({fecha:dc.fecha,turno:dc.turno}))+(dc.por?' · '+esc(dc.por):'')+'</p><p class="rm-big">'+fFecha(dc.fecha)+' · '+esc(dc.hora||'—')+'</p><p class="hint">'+fmt(c.tot)+' L a 15°</p>':'<p class="hint">'+(c.st==='nodecl'?'El distrito todavía no cargó este remito en ningún turno.':'Sin datos del distrito para esta fecha (tocá «Actualizar» en la pantalla de Remitos).')+'</p>');
+    if(typeof remBotonIgualar==='function')remBotonIgualar(orig,o,c);
     $('#rmCru').innerHTML=c.st==='dif'?'<div class="banner err"><span><b>No coincide con el distrito:</b><br>'+c.dif.map(esc).join('<br>')+'</span></div>':c.st==='ok'?'<p class="banner ok"><span>Coincide con lo que declaró el distrito: día, hora y litros por cisterna.</span></p>':'';
     if(c.der&&c.der.length)$('#rmCru').insertAdjacentHTML('beforeend','<p class="hint">Cisternas derivadas por el distrito a otro destino: '+c.der.map(function(x){return x.k+(x.d?' ('+esc(D(x.d)?D(x.d).n:x.d)+')':'');}).join(', ')+'.</p>');}
   pintar();
@@ -4211,7 +4227,6 @@ function modalRemito(id,pre){
     traerCamiones(addDays(f0,-3),addDays(f0,10)).then(function(){if($('#rmDecl'))pintar();});}
   $('#modalCard').addEventListener('input',function(e){if(e.target.id&&/^rm(C\d|FL|HL|D|R)$/.test(e.target.id))pintar();});
   $('#modalCard').addEventListener('change',function(e){if(e.target.id==='rmD'||e.target.id==='rmFL')pintar();});
-  if($('#rmUsaY'))$('#rmUsaY').addEventListener('click',function(){var f=$('#rmYF').value,h=$('#rmYH').value;if(!f||!h){msg.textContent='Completá fecha y hora del portal.';return;}$('#rmFL').value=f;$('#rmHL').value=h;pintar();});
   function validar(o,conf){
     if(!o.dist)return 'Elegí el distrito.';if(!/^\d{4}-\d{8}$/.test(o.remito))return 'El remito debe tener el formato 0000-00000000.';
     var otro=remPorRemito(o.remito,o.id);if(otro)return 'El remito '+o.remito+' ya está cargado ('+(D(otro.dist)?D(otro.dist).n:otro.dist)+').';
@@ -4220,10 +4235,9 @@ function modalRemito(id,pre){
     if(conf&&(!o.fLleg||!o.hLleg))return 'Para confirmar falta la fecha y hora de llegada.';
     if(conf&&o.total==null)return 'Para confirmar faltan los litros a 15°.';
     return '';}
-  function cambios(a,b){var ch=[],L={dist:'Distrito',remito:'Remito',pedido:'Pedido',entrega:'Entrega',fSal:'Fecha salida',hSal:'Hora salida',fLleg:'Fecha llegada',hLleg:'Hora llegada',obs:'Observaciones'};
+  function cambios(a,b){var ch=[],L={dist:'Distrito',remito:'Remito',pedido:'Pedido',entrega:'Entrega',fSal:'Fecha salida',hSal:'Hora salida',fLleg:'Llegada YPF (fecha)',hLleg:'Llegada YPF (hora)',obs:'Observaciones'};
     Object.keys(L).forEach(function(k){if((a[k]||'')!==(b[k]||''))ch.push(L[k]+' '+(k.charAt(0)==='f'&&a[k]?fFecha(a[k]):a[k]||'—')+' → '+(k.charAt(0)==='f'&&b[k]?fFecha(b[k]):b[k]||'—'));});
     for(var k=0;k<NCAM;k++)if((a.cist[k]==null?null:+a.cist[k])!==(b.cist[k]==null?null:+b.cist[k]))ch.push('Cisterna '+(k+1)+' '+(a.cist[k]!=null?fmt(a.cist[k]):'—')+' → '+(b.cist[k]!=null?fmt(b.cist[k]):'—'));
-    var ya=a.ypf||{},yb=b.ypf||{};if((ya.f||'')+(ya.h||'')!==(yb.f||'')+(yb.h||''))ch.push('Portal YPF '+((ya.f?fFecha(ya.f):'—')+' '+(ya.h||''))+' → '+((yb.f?fFecha(yb.f):'—')+' '+(yb.h||'')));
     return ch;}
   function guardar(conf){var o=leer(),e=validar(o,conf);if(e){msg.textContent=e;return;}
     var c=remCruce(o,camIndex());
@@ -4323,41 +4337,42 @@ function revisarArchivos(ds){
   gs.forEach(function(m){if(!m.dist&&m.pedido){var op=getOPs().filter(function(x){return soloDig(x.nPedido)===m.pedido;})[0];if(op)m.dist=op.dist;}m.reg=remBuscar(m);if(m.reg&&!m.remito){m.remito=m.reg.remito;m.entrega=m.reg.entrega||m.entrega;}});
   var CAMPOS=[['dist','Distrito'],['remito','Remito'],['pedido','Pedido'],['entrega','Entrega'],['fSal','Fecha salida','date'],['hSal','Hora salida','time']];
   for(var k=0;k<NCAM;k++)CAMPOS.push(['c'+k,'Cisterna 00'+(k+1)+' a 15°']);
-  CAMPOS.push(['yF','Portal YPF: fecha de entrega','date'],['yH','Portal YPF: hora','time'],['fLleg','Llegada del control: fecha','date'],['hLleg','Llegada del control: hora','time']);
-  function actual(r,k){if(!r)return '';if(k.charAt(0)==='c'&&/^c\d$/.test(k))return r.cist[+k.slice(1)];if(k==='yF')return r.ypf?r.ypf.f:'';if(k==='yH')return r.ypf?r.ypf.h:'';return r[k];}
+  CAMPOS.push(['fLleg','Llegada YPF: fecha','date'],['hLleg','Llegada YPF: hora','time']);
+  function actual(r,k){if(!r)return '';if(/^c\d$/.test(k))return r.cist[+k.slice(1)];return r[k];}
   function propuesto(m,k){if(/^c\d$/.test(k))return m.cist?m.cist[+k.slice(1)]:null;if(k==='fLleg')return m.yF;if(k==='hLleg')return m.yH;return m[k];}
-  function ver(k,v){if(v==null||v==='')return '—';if(k==='dist')return D(v)?D(v).n:v;if(/^(fSal|yF|fLleg)$/.test(k))return fFecha(v);if(/^c\d$/.test(k))return fmt(v);return v;}
-  var html=gs.map(function(m,gi){var r=m.reg,ro=r&&r.conf;
+  function ver(k,v){if(v==null||v==='')return '—';if(k==='dist')return D(v)?D(v).n:v;if(/^(fSal|fLleg)$/.test(k))return fFecha(v);if(/^c\d$/.test(k))return fmt(v);return v;}
+  var html=gs.map(function(m,gi){var r=m.reg,ro=remBloq(r);
     var filas=CAMPOS.map(function(c){var k=c[0],p=propuesto(m,k),a=actual(r,k);if(p==null||p==='')return '';
-      var igual=String(a==null?'':a)===String(p),lleg=k==='fLleg'||k==='hLleg';if(igual)return '';
-      var marcar=!ro&&(lleg?!a:true),inp=k==='dist'?'<select data-g="'+gi+'" data-k="'+k+'">'+usinas().map(function(d){return '<option value="'+d+'"'+(d===p?' selected':'')+'>'+esc(D(d).n)+'</option>';}).join('')+'</select>':'<input data-g="'+gi+'" data-k="'+k+'" '+(c[2]?'type="'+c[2]+'"':'inputmode="numeric"')+' value="'+esc(p)+'">';
+      var igual=String(a==null?'':a)===String(p);if(igual)return '';
+      var marcar=!ro,inp=k==='dist'?'<select data-g="'+gi+'" data-k="'+k+'">'+usinas().map(function(d){return '<option value="'+d+'"'+(d===p?' selected':'')+'>'+esc(D(d).n)+'</option>';}).join('')+'</select>':'<input data-g="'+gi+'" data-k="'+k+'" '+(c[2]?'type="'+c[2]+'"':'inputmode="numeric"')+' value="'+esc(p)+'">';
       return '<tr'+(a!=null&&a!==''?' class="rm-chg"':'')+'><td><input type="checkbox" data-gk="'+gi+'|'+k+'"'+(marcar?' checked':'')+(ro?' disabled':'')+' aria-label="Usar '+esc(c[1])+'"></td><td>'+esc(c[1])+'</td><td>'+esc(ver(k,a))+'</td><td>'+inp+'</td></tr>';}).join('');
     var sinRem=!r&&!m.remito;
-    return '<div class="card block rm-grp"><h4>'+(m.remito?'Remito '+esc(m.remito):'Camión sin N° de remito')+(m.dist?' · '+esc(D(m.dist).n):'')+' '+(r?(ro?'<span class="chip g">Confirmado</span>':'<span class="chip b">Ya está en el control</span>'):'<span class="chip y">Nuevo</span>')+'</h4>'+
+    return '<div class="card block rm-grp"><h4>'+(m.remito?'Remito '+esc(m.remito):'Camión sin N° de remito')+(m.dist?' · '+esc(D(m.dist).n):'')+' '+(r?(ro?'<span class="chip g">Confirmado a mano</span>':'<span class="chip b">Ya está en el control</span>'):'<span class="chip y">Nuevo</span>')+'</h4>'+
       '<p class="hint">'+m.archivos.map(function(d){return esc(d.archivo)+' ('+REM_TIPOS[d.tipo]+(d.ocr?', leído de imagen':'')+')';}).join(' · ')+(m.carga?' · Carga en terminal '+fFecha(m.carga.f)+' '+esc(m.carga.h):'')+'</p>'+
-      (ro?'<p class="banner warn"><span>La llegada ya está confirmada. Para aplicar estos datos, reabrí el remito con el motivo.</span></p>':'')+
+      (ro?'<p class="banner warn"><span>Este remito se confirmó a mano. Para aplicar estos datos, reabrilo con el motivo.</span></p>':'')+
       (sinRem?'<p class="banner warn"><span>No se encontró el remito en el control ni en el archivo. Completá el N° de remito en la tabla para agregarlo.</span></p>':'')+
       (m.ocr&&!ro?'<p class="hint">Revisá los números: los datos leídos de una imagen pueden tener algún dígito mal.</p>':'')+
       (filas?'<div class="tablewrap"><table class="rm-rev"><thead><tr><th>Usar</th><th>Dato</th><th>En el control</th><th>Del archivo (podés corregirlo)</th></tr></thead><tbody>'+filas+'</tbody></table></div>':'<p class="empty">Los datos del archivo ya coinciden con el control.</p>')+'</div>';}).join('');
-  openModal('<h3>Datos encontrados en los archivos</h3><p class="hint">Marcá lo que querés pasar al control. Nada queda confirmado: la llegada se confirma después, desde la ficha de cada remito.</p>'+
+  openModal('<h3>Datos encontrados en los archivos</h3><p class="hint">Marcá lo que querés pasar al control. La llegada que viene del portal YPF queda tomada como dato de YPF; revisá antes que los números estén bien leídos.</p>'+
     (html||'<p class="empty">No se encontraron datos de remitos en los archivos.</p>')+
     (malos.length?'<div class="banner warn"><span><b>No se pudieron leer:</b><br>'+malos.map(function(d){return esc(d.archivo)+': '+esc(d.err||'no parece un remito, una captura del portal YPF ni una Guía de Carga');}).join('<br>')+'</span></div>':'')+
     '<p class="login-msg" id="rvMsg" role="alert"></p><div class="row-end"><button class="btn" type="button" data-close>Cancelar</button>'+(html?'<button class="btn primary" type="button" id="rvOk">Pasar al control</button>':'')+'</div>');
   if(!$('#rvOk'))return;
   $('#rvOk').addEventListener('click',function(){var lista=[],err='';
-    gs.forEach(function(m,gi){var r=m.reg;if(r&&r.conf)return;var sel=$$('[data-gk^="'+gi+'|"]').filter(function(x){return x.checked;}).map(function(x){return x.dataset.gk.split('|')[1];});if(!sel.length)return;
+    gs.forEach(function(m,gi){var r=m.reg;if(remBloq(r))return;var sel=$$('[data-gk^="'+gi+'|"]').filter(function(x){return x.checked;}).map(function(x){return x.dataset.gk.split('|')[1];});if(!sel.length)return;
       var o=r?clone(r):nuevoRem(),ch=[];
       sel.forEach(function(k){var el=document.querySelector('[data-g="'+gi+'"][data-k="'+k+'"]'),v=el?el.value.trim():'';
-        if(/^c\d$/.test(k))o.cist[+k.slice(1)]=remLit(v);else if(k==='yF'||k==='yH'){o.ypf=o.ypf||{};o.ypf[k==='yF'?'f':'h']=k==='yH'?remHora(v):v;}
+        if(/^c\d$/.test(k))o.cist[+k.slice(1)]=remLit(v);
         else if(k==='remito')o.remito=remNorm(v);else if(k==='pedido'||k==='entrega')o[k]=soloDig(v);else if(k==='hSal'||k==='hLleg')o[k]=remHora(v);else o[k]=v;ch.push(k);});
       if(!o.dist&&m.dist)o.dist=m.dist;if(!o.remito&&m.remito)o.remito=m.remito;if(m.carga)o.carga=m.carga;if(m.transp&&!o.transp)o.transp=m.transp;
       if(!/^\d{4}-\d{8}$/.test(o.remito||'')){err='Falta el N° de remito de un camión ('+m.archivos.map(function(d){return d.archivo;}).join(', ')+').';return;}
       if(!o.dist){err='Falta el distrito del remito '+o.remito+'.';return;}
       var otro=remPorRemito(o.remito,o.id);if(otro){err='El remito '+o.remito+' ya está cargado en otro registro.';return;}
+      if(o.fLleg&&o.hLleg&&(!o.conf||o.conf.auto)&&(sel.indexOf('fLleg')>=0||sel.indexOf('hLleg')>=0||!o.conf))o.conf=confAuto('Portal YPF');
       lista.push({r:o,acc:r?'Datos de archivo':'Cargado desde archivo',det:m.archivos.map(function(d){return d.archivo;}).join(', ')+' ('+ch.length+' dato'+(ch.length>1?'s':'')+')'});});
     if(err){$('#rvMsg').textContent=err;return;}
     if(!lista.length){closeModal();toast('No había datos marcados para pasar.');return;}
-    remGuardarVarios(lista);closeModal();toast(lista.length+' remito(s) actualizado(s). Revisá y confirmá la llegada desde cada ficha.');render();});
+    remGuardarVarios(lista);closeModal();toast(lista.length+' remito(s) actualizado(s).');render();});
 }
 
 /* ---------- Excel «CONTROL DE REMITOS»: importar (con comparación) y descargar ---------- */
@@ -4399,7 +4414,7 @@ function compararExcelRem(x,nombre){
   x.filas.forEach(function(f){if(vistos[f.remito]){repe.push(f.remito);return;}vistos[f.remito]=1;if(!f.dist)return;var r=porRem[f.remito];if(!r){nuevos.push(f);return;}
     var d=[];REM_CMP.forEach(function(c){var v=f[c[0]];if(v==null||v==='')return;if(String(r[c[0]]||'')!==String(v))d.push({k:c[0],l:c[1],a:r[c[0]],b:v});});
     for(var k=0;k<NCAM;k++){var v=f.cist[k];if(v==null)continue;if(r.cist[k]==null||Math.abs(+r.cist[k]-v)>0.001)d.push({k:'c'+k,l:'Cisterna 00'+(k+1),a:r.cist[k],b:v});}
-    if(d.length)dist.push({f:f,r:r,d:d});else iguales++;});
+    if(d.length)dist.push({f:f,r:r,d:d,bloq:remBloq(r)});else iguales++;});
   var enApp=getRemitos().filter(function(r){return !vistos[r.remito];}).length;
   var vv=function(k,v){if(v==null||v==='')return '—';if(k==='dist')return D(v)?D(v).n:v;if(k.charAt(0)==='f')return fFecha(v);if(/^c\d$/.test(k))return fmt(v);return v;};
   openModal('<h3>Comparación con '+esc(nombre)+'</h3>'+
@@ -4408,17 +4423,17 @@ function compararExcelRem(x,nombre){
     (repe.length?'<p class="hint">Remitos repetidos en el Excel (se toma la primera fila): '+esc(repe.join(', '))+'</p>':'')+
     (nuevos.length?'<div class="card block"><label class="rm-chk"><input type="checkbox" id="ixNue" checked> <b>Agregar los '+nuevos.length+' remitos nuevos</b></label><details><summary>Ver lista</summary><div class="tablewrap"><table><thead><tr><th>Salida</th><th>Distrito</th><th>Remito</th><th>Llegada</th><th>Litros a 15°</th></tr></thead><tbody>'+
       nuevos.slice(0,400).map(function(f){return '<tr><td>'+fFecha(f.fSal)+' '+esc(f.hSal)+'</td><td>'+esc(D(f.dist).n)+'</td><td>'+esc(f.remito)+'</td><td>'+(f.fLleg?fFecha(f.fLleg)+' '+esc(f.hLleg):'—')+'</td><td class="n">'+fmt(remTotal(f.cist))+'</td></tr>';}).join('')+'</tbody></table></div></details></div>':'')+
-    (dist.length?'<div class="card block"><h4>Datos distintos: elegí cuáles tomar del Excel</h4><p class="hint">Sin marcar, queda lo que tiene la app. Los remitos con llegada confirmada no se cambian desde acá: reabrilos primero.</p><div class="tablewrap"><table class="rm-rev"><thead><tr><th>Usar Excel</th><th>Remito</th><th>Dato</th><th>En la app</th><th>En el Excel</th></tr></thead><tbody>'+
-      dist.map(function(o,i){return o.d.map(function(d,j){return '<tr><td><input type="checkbox" data-ix="'+i+'|'+j+'"'+(o.r.conf?' disabled':'')+'></td><td>'+(j?'':'<b>'+esc(o.r.remito)+'</b>'+(o.r.conf?' <span class="chip g">Confirmado</span>':''))+'</td><td>'+esc(d.l)+'</td><td>'+esc(vv(d.k,d.a))+'</td><td>'+esc(vv(d.k,d.b))+'</td></tr>';}).join('');}).join('')+'</tbody></table></div>'+
+    (dist.length?'<div class="card block"><h4>Datos distintos: elegí cuáles tomar del Excel</h4><p class="hint">Sin marcar, queda lo que tiene la app. Los remitos confirmados a mano no se cambian desde acá: reabrilos primero.</p><div class="tablewrap"><table class="rm-rev"><thead><tr><th>Usar Excel</th><th>Remito</th><th>Dato</th><th>En la app</th><th>En el Excel</th></tr></thead><tbody>'+
+      dist.map(function(o,i){return o.d.map(function(d,j){return '<tr><td><input type="checkbox" data-ix="'+i+'|'+j+'"'+(o.bloq?' disabled':'')+'></td><td>'+(j?'':'<b>'+esc(o.r.remito)+'</b>'+(o.bloq?' <span class="chip g">Confirmado a mano</span>':''))+'</td><td>'+esc(d.l)+'</td><td>'+esc(vv(d.k,d.a))+'</td><td>'+esc(vv(d.k,d.b))+'</td></tr>';}).join('');}).join('')+'</tbody></table></div>'+
       '<div class="row-end"><button class="ghost small" type="button" id="ixTodo">Marcar todos</button></div></div>':'')+
     (!nuevos.length&&!dist.length?'<p class="banner ok"><span>El Excel no trae nada nuevo ni distinto.</span></p>':'')+
     '<div class="row-end"><button class="btn" type="button" data-close>Cancelar</button>'+(nuevos.length||dist.length?'<button class="btn primary" type="button" id="ixOk">Aplicar</button>':'')+'</div>');
   if($('#ixTodo'))$('#ixTodo').addEventListener('click',function(){$$('[data-ix]').forEach(function(c){if(!c.disabled)c.checked=true;});});
   if(!$('#ixOk'))return;
   $('#ixOk').addEventListener('click',function(){var lista=[];
-    if(nuevos.length&&$('#ixNue').checked)nuevos.forEach(function(f){var o=nuevoRem();['remito','dist','pedido','entrega','fSal','hSal','fLleg','hLleg'].forEach(function(k){o[k]=f[k]||'';});o.cist=f.cist.slice();lista.push({r:o,acc:'Importado del Excel',det:nombre+' (fila '+f.fila+')'});});
-    dist.forEach(function(o,i){if(o.r.conf)return;var sel=o.d.filter(function(d,j){var c=document.querySelector('[data-ix="'+i+'|'+j+'"]');return c&&c.checked;});if(!sel.length)return;
-      var r=clone(o.r);sel.forEach(function(d){if(/^c\d$/.test(d.k))r.cist[+d.k.slice(1)]=d.b;else r[d.k]=d.b;});
+    if(nuevos.length&&$('#ixNue').checked)nuevos.forEach(function(f){var o=nuevoRem();['remito','dist','pedido','entrega','fSal','hSal','fLleg','hLleg'].forEach(function(k){o[k]=f[k]||'';});o.cist=f.cist.slice();if(o.fLleg&&o.hLleg)o.conf=confAuto('Excel');lista.push({r:o,acc:'Importado del Excel',det:nombre+' (fila '+f.fila+')'});});
+    dist.forEach(function(o,i){if(o.bloq)return;var sel=o.d.filter(function(d,j){var c=document.querySelector('[data-ix="'+i+'|'+j+'"]');return c&&c.checked;});if(!sel.length)return;
+      var r=clone(o.r);sel.forEach(function(d){if(/^c\d$/.test(d.k))r.cist[+d.k.slice(1)]=d.b;else r[d.k]=d.b;});if(r.fLleg&&r.hLleg&&!r.conf)r.conf=confAuto('Excel');
       lista.push({r:r,acc:'Actualizado desde Excel',det:nombre+': '+sel.map(function(d){return d.l+' '+vv(d.k,d.a)+' → '+vv(d.k,d.b);}).join('; ')});});
     if(!lista.length){toast('No marcaste nada para aplicar.');return;}
     remGuardarVarios(lista);closeModal();if(remF.mes&&!lista.some(function(x){return (x.r.fSal||'').slice(0,7)===remF.mes;}))remF.mes='';
@@ -4429,26 +4444,180 @@ function exportarRemitos(){
   if(typeof JSZip==='undefined'){toast('Falta el componente de Excel.');return;}
   var idx=camIndex(),lista=getRemitos().filter(function(r){return (!remF.dist||r.dist===remF.dist);}).sort(function(a,b){var x=(a.fSal||a.fLleg||'')+(a.hSal||''),y=(b.fSal||b.fLleg||'')+(b.hSal||'');return x<y?-1:x>y?1:0;});
   if(!lista.length){toast('No hay remitos para descargar.');return;}
-  var H=['FECHA DE SALIDA','HORA DE SALIDA','DISTRITO','PEDIDO','ENTREGA','FECHA DE LLEGADA','REMITO','HORA DE LLEGADA','001','002','003','004','005','006','007','TOTAL DE COMBUSTIBLE','ESTADO','CONFIRMADO POR','LLEGADA PORTAL YPF','CRUCE CON EL DISTRITO'];
+  var H=['FECHA DE SALIDA','HORA DE SALIDA','DISTRITO','PEDIDO','ENTREGA','FECHA DE LLEGADA','REMITO','HORA DE LLEGADA','001','002','003','004','005','006','007','TOTAL DE COMBUSTIBLE','ESTADO','CONFIRMADO POR','CRUCE CON EL DISTRITO'];
   function cS(ref,v,s){return '<c r="'+ref+'" t="inlineStr"'+(s?' s="'+s+'"':'')+'><is><t xml:space="preserve">'+xmlEsc(v)+'</t></is></c>';}
   function cN(ref,v,s){return v==null||v===''||isNaN(v)?'':'<c r="'+ref+'"'+(s?' s="'+s+'"':'')+'><v>'+v+'</v></c>';}
   var rows=['<row r="1">'+cS('I1','CANT.A 15°',1)+'</row>','<row r="2">'+H.map(function(h,i){return cS(colTxt(i+1)+'2',h,1);}).join('')+'</row>'];
-  lista.forEach(function(r,i){var n=i+3,c=remCruce(r,idx),e={conf:'Confirmado',pend:'Por confirmar',sin:'Sin llegada'}[remEstado(r)];
+  lista.forEach(function(r,i){var n=i+3,c=remCruce(r,idx),e={conf:r.conf&&r.conf.auto?'Confirmado (YPF)':'Confirmado',pend:'Por confirmar',sin:'Sin llegada'}[remEstado(r)];
     var cru={ok:'Coincide',dif:'Diferencia: '+(c.dif||[]).join(' | '),nodecl:'El distrito no lo cargó',nodata:'Sin datos del distrito'}[c.st];
     var pd=soloDig(r.pedido),en=soloDig(r.entrega);
     rows.push('<row r="'+n+'">'+(r.fSal?cN('A'+n,xserial(r.fSal),2):'')+(r.hSal?cN('B'+n,xtime(r.hSal),3):'')+cS('C'+n,nomRem(r.dist))+(pd?(pd.length<15?cN('D'+n,+pd,0):cS('D'+n,pd)):'')+(en?(en.length<15?cN('E'+n,+en,0):cS('E'+n,en)):'')+
       (r.fLleg?cN('F'+n,xserial(r.fLleg),2):'')+cS('G'+n,r.remito)+(r.hLleg?cN('H'+n,xtime(r.hLleg),3):'')+
-      r.cist.map(function(v,k){return cN(colTxt(9+k)+n,v,4);}).join('')+cN('P'+n,r.total,4)+cS('Q'+n,e)+(r.conf?cS('R'+n,r.conf.nombre+' · '+fFH(r.conf.ts)):'')+(r.ypf&&r.ypf.f?cS('S'+n,fFecha(r.ypf.f)+' '+(r.ypf.h||'')):'')+cS('T'+n,cru)+'</row>');});
-  var last=lista.length+2,W=[12,10,18,12,11,12,15,10,8,8,8,8,8,8,8,13,14,26,18,40];
-  var sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="'+NS_M+'" xmlns:r="'+NS_R+'"><sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>'+W.map(function(w,i){return '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>';}).join('')+'</cols><sheetData>'+rows.join('')+'</sheetData><autoFilter ref="A2:T'+last+'"/><mergeCells count="1"><mergeCell ref="I1:O1"/></mergeCells></worksheet>';
+      r.cist.map(function(v,k){return cN(colTxt(9+k)+n,v,4);}).join('')+cN('P'+n,r.total,4)+cS('Q'+n,e)+(r.conf?cS('R'+n,r.conf.nombre+' · '+fFH(r.conf.ts)):'')+cS('S'+n,cru)+'</row>');});
+  var last=lista.length+2,W=[12,10,18,12,11,12,15,10,8,8,8,8,8,8,8,13,16,30,40];
+  var sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="'+NS_M+'" xmlns:r="'+NS_R+'"><sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>'+W.map(function(w,i){return '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>';}).join('')+'</cols><sheetData>'+rows.join('')+'</sheetData><autoFilter ref="A2:S'+last+'"/><mergeCells count="1"><mergeCell ref="I1:O1"/></mergeCells></worksheet>';
   var styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="'+NS_M+'"><numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="hh:mm"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDFE7F3"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="5"><xf/><xf fontId="1" fillId="2" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="164" applyNumberFormat="1"/><xf numFmtId="165" applyNumberFormat="1"/><xf numFmtId="3" applyNumberFormat="1"/></cellXfs></styleSheet>';
   var z=new JSZip();
   z.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
   z.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="'+NS_PR+'"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
-  z.file('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="'+NS_M+'" xmlns:r="'+NS_R+'"><sheets><sheet name="REMITOS '+todayISO().slice(0,4)+'" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">\'REMITOS '+todayISO().slice(0,4)+'\'!$A$2:$T$'+last+'</definedName></definedNames></workbook>');
+  z.file('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="'+NS_M+'" xmlns:r="'+NS_R+'"><sheets><sheet name="REMITOS '+todayISO().slice(0,4)+'" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">\'REMITOS '+todayISO().slice(0,4)+'\'!$A$2:$S$'+last+'</definedName></definedNames></workbook>');
   z.file('xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="'+NS_PR+'"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
   z.file('xl/worksheets/sheet1.xml',sheet);z.file('xl/styles.xml',styles);
   z.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}).then(function(b){var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='CONTROL DE REMITOS'+(remF.dist?' - '+nomRem(remF.dist):'')+' - '+todayISO()+'.xlsx';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},2000);toast('Excel descargado ('+lista.length+' remitos).');});
+}
+
+/* =====================================================================
+   IGUALAR LOS TURNOS CON EL CONTROL DE REMITOS
+   El remito (llegada YPF y litros a 15°) es el dato correcto: el camión
+   del turno toma su hora y sus litros por cisterna. Si la hora corresponde
+   a otro turno, el camión se mueve. Las existencias medidas no cambian, así
+   que solo se recalcula el consumo de los turnos tocados.
+   ===================================================================== */
+function slotDeHora(h){var x=+String(h||'').slice(0,2);return isNaN(x)?0:Math.min(3,Math.floor(x/6));}
+function remDeSlot(dist,f,t){return getRemitos().filter(function(r){return r.dist===dist&&r.fLleg===f&&r.hLleg&&slotDeHora(r.hLleg)===t;}).sort(function(a,b){return a.hLleg<b.hLleg?-1:1;});}
+function remDeDist(dist,rem){rem=remNorm(rem);return getRemitos().filter(function(r){return r.dist===dist&&r.remito===rem;})[0]||null;}
+/** camión del turno (formato guardado) con los datos del remito; conserva las cisternas derivadas y las rechazadas */
+function camDesdeRem(r,base){
+  var c=base?clone(base):{hora:'',remito:r.remito,litros:0,op:'',entrega:'',fecha:'',cisternas:[],rechazos:[],estados:[],destinos:[],foto:null,parcial:false,motivo:''};
+  var est=camEstados(c),cis=[],rec=[],des=(c.destinos||[]).slice();
+  for(var k=0;k<NCAM;k++){var v=+((r.cist||[])[k]||0),e=est[k]||'';
+    if(e==='o'){cis.push(0);rec.push(0);}
+    else if(e==='r'&&v>0){cis.push(0);rec.push(v);}
+    else{est[k]=v>0?'d':'v';cis.push(v>0?v:0);rec.push(0);}
+    if(est[k]!=='o')des[k]='';}
+  c.hora=r.hLleg;c.remito=r.remito;c.cisternas=cis;c.rechazos=rec;c.estados=est.slice(0,NCAM);c.destinos=des.slice(0,NCAM);c.litros=sum(cis);
+  if(!c.op)c.op=r.pedido||'';if(!c.entrega)c.entrega=r.entrega||'';if(!c.fecha)c.fecha=r.fSal||'';
+  return c;}
+function difCam(a,n){var ch=[],p='Camión '+n.remito+': ';
+  if((a.hora||'')!==(n.hora||''))ch.push(p+'hora '+(a.hora||'—')+' → '+n.hora);
+  for(var k=0;k<NCAM;k++){var x=(+(a.cisternas||[])[k]||0)+(+(a.rechazos||[])[k]||0),y=(+(n.cisternas||[])[k]||0)+(+(n.rechazos||[])[k]||0);if(Math.abs(x-y)>0.001)ch.push(p+'cisterna '+(k+1)+' '+fmt(x)+' → '+fmt(y)+' L');}
+  if(Math.abs((a.litros||0)-(n.litros||0))>0.001)ch.push(p+'litros '+fmt(a.litros)+' → '+fmt(n.litros));
+  return ch;}
+function idxCam(t,rem){for(var i=0;i<(t.camiones||[]).length;i++)if(remNorm(t.camiones[i].remito)===rem)return i;return -1;}
+/** qué hay que hacer para que el turno coincida con el remito */
+function remPlan(r,idx,map){
+  if(!r.conf||!r.fLleg||!r.hLleg||!r.dist||!r.remito)return null;
+  var c=remCruce(r,idx);if(c.st!=='dif'&&c.st!=='nodecl')return null;
+  var td=map[r.dist+'#'+r.fLleg+'#'+slotDeHora(r.hLleg)]||null,rot={fecha:r.fLleg,turno:slotDeHora(r.hLleg)};
+  if(c.st==='nodecl')return td?{tipo:'agregar',r:r,dest:td}:{tipo:'sinturno',r:r,slot:rot};
+  var org=getTurnos().filter(function(t){return t.id===c.c.tid;})[0];
+  if(!org||idxCam(org,r.remito)<0)return {tipo:'nolocal',r:r};
+  if(!td)return {tipo:'sinturno',r:r,slot:rot,org:org};
+  if(td.id!==org.id&&idxCam(td,r.remito)>=0)return {tipo:'doble',r:r,org:org,dest:td};
+  return {tipo:td.id===org.id?'actualizar':'mover',r:r,org:org,dest:td};
+}
+function planTxt(p){var r=p.r;
+  if(p.tipo==='actualizar'){var a=p.org.camiones[idxCam(p.org,r.remito)];return difCam(a,camDesdeRem(r,a)).join(' · ')||'Sin cambios';}
+  if(p.tipo==='mover'){var a2=p.org.camiones[idxCam(p.org,r.remito)],n=camDesdeRem(r,a2),d=difCam(a2,n);return 'Pasa del turno '+slotLabel(p.org)+' al '+slotLabel(p.dest)+(d.length?' · '+d.join(' · '):'');}
+  if(p.tipo==='agregar'){var n2=camDesdeRem(r,null);return 'Se agrega al turno '+slotLabel(p.dest)+': '+n2.hora+' · '+fmt(n2.litros)+' L';}
+  if(p.tipo==='sinturno')return 'El turno '+slotLabel(p.slot)+' todavía no está cargado'+(p.org?' (el distrito lo declaró en el '+slotLabel(p.org)+')':'')+'. Cargalo en Histórico: los camiones se completan solos con el control.';
+  if(p.tipo==='doble')return 'El remito figura en dos turnos ('+slotLabel(p.org)+' y '+slotLabel(p.dest)+'). Corregilo a mano.';
+  return 'No se encontró el turno en este equipo.';}
+/** consumo que quedaría en cada turno tocado (con todos los cambios marcados) */
+function remSimular(planes){var d={},t={};
+  function mas(tu,v){t[tu.id]=tu;d[tu.id]=(d[tu.id]||0)+v;}
+  planes.forEach(function(p){var r=p.r;
+    if(p.tipo==='actualizar'){var a=p.org.camiones[idxCam(p.org,r.remito)];mas(p.org,camDesdeRem(r,a).litros-(a.litros||0));}
+    else if(p.tipo==='mover'){var a2=p.org.camiones[idxCam(p.org,r.remito)];mas(p.org,-(a2.litros||0));mas(p.dest,camDesdeRem(r,a2).litros);}
+    else if(p.tipo==='agregar')mas(p.dest,camDesdeRem(r,null).litros);});
+  return Object.keys(d).filter(function(id){return Math.abs(d[id])>0.001;}).map(function(id){return {t:t[id],antes:t[id].consumo,despues:r2(t[id].consumo+d[id])};});}
+/** trae del servidor los meses de turnos que hacen falta (del remito y del camión declarado) */
+function remPreparar(lista){
+  if(DEMO||!cfg.syncUrl)return Promise.resolve();
+  if(!navigator.onLine)return Promise.reject(new Error('Sin conexión: hace falta traer los turnos del servidor.'));
+  var idx=camIndex(),pares={};
+  lista.forEach(function(r){if(r.dist&&r.fLleg)pares[r.dist+'|'+r.fLleg.slice(0,7)]=1;var c=remCruce(r,idx);if(c.c)pares[c.c.dist+'|'+c.c.fecha.slice(0,7)]=1;});
+  var ch=Promise.resolve();Object.keys(pares).forEach(function(k){var p=k.split('|');ch=ch.then(function(){return traerMes(p[0],p[1]);});});
+  return ch;}
+function remPlanes(lista){var idx=camIndex(),map=mapTurnos(getTurnos());return lista.map(function(r){return remPlan(r,idx,map);}).filter(Boolean);}
+/** aplica los cambios a los turnos y los deja para enviar */
+function remAplicar(planes){
+  var u=me(),ts=new Date().toISOString(),a=getTurnos(),by={},cons0={},toc={},corr={},porRem={};a.forEach(function(t){by[t.id]=t;});
+  function tocar(t,ch,rem){if(cons0[t.id]==null)cons0[t.id]=t.consumo;t.ingresos=sum(t.camiones.map(function(c){return c.litros;}));t.consumo=r2(t.inicio+t.ingresos-t.total);
+    t.ediciones=(t.ediciones||[]).concat([{cuando:ts,por:u.nombre+' ('+u.cat+')'+(t.hist?' · modo histórico':''),cambios:ch,remito:rem}]);toc[t.id]=t;(corr[t.id]=corr[t.id]||[]).push.apply(corr[t.id],ch);}
+  function ordenar(t){t.camiones.sort(function(x,y){return (x.hora||'')<(y.hora||'')?-1:1;});}
+  planes.forEach(function(p){var r=p.r,ch;
+    if(p.tipo==='actualizar'){var t=by[p.org.id],i=idxCam(t,r.remito),n=camDesdeRem(r,t.camiones[i]);ch=difCam(t.camiones[i],n);if(!ch.length)return;t.camiones[i]=n;ordenar(t);tocar(t,ch.map(function(x){return x+' (igualado al remito de control)';}),r.remito);porRem[r.id]='Turno '+slotLabel(t)+' igualado';}
+    else if(p.tipo==='mover'){var t1=by[p.org.id],t2=by[p.dest.id],j=idxCam(t1,r.remito),viejo=t1.camiones.splice(j,1)[0],n2=camDesdeRem(r,viejo);t2.camiones.push(n2);ordenar(t2);
+      tocar(t1,['Camión '+r.remito+' pasado al turno '+slotLabel(t2)+' (según el remito de control llegó el '+fFecha(r.fLleg)+' a las '+r.hLleg+')'],r.remito);
+      tocar(t2,['Camión '+r.remito+' traído del turno '+slotLabel(t1)+': '+n2.hora+' · '+fmt(n2.litros)+' L (igualado al remito de control)'],r.remito);porRem[r.id]='Camión pasado del turno '+slotLabel(t1)+' al '+slotLabel(t2);}
+    else if(p.tipo==='agregar'){var t3=by[p.dest.id],n3=camDesdeRem(r,null);t3.camiones.push(n3);ordenar(t3);tocar(t3,['Camión '+r.remito+' agregado desde el control de remitos: '+n3.hora+' · '+fmt(n3.litros)+' L'],r.remito);porRem[r.id]='Camión agregado al turno '+slotLabel(t3);}
+  });
+  var ids=Object.keys(toc);if(!ids.length)return 0;
+  ids.forEach(function(id){var t=toc[id];if(cons0[id]!==t.consumo)t.ediciones[t.ediciones.length-1].cambios.push('Consumo '+fmt(cons0[id],true)+' → '+fmt(t.consumo,true));
+    /* turno de un operador: queda asentado en un informe de redeclaración */
+    if(!t.hist){var inf=crearInforme({dist:t.dist,tipo:'Redeclaración de camión',fechaHecho:t.fecha,turnos:[t.id],titulo:'Redeclaración de camión · '+slotLabel(t),
+        descripcion:'Igualado al control de remitos (llegada YPF y litros a 15°) por '+u.nombre+' ('+cargoDe(u).abrev+').',origen:'redeclaracion',estado:'pendiente',
+        correcciones:corr[id].map(function(x){return {campo:x,por:u.nombre,cuando:ts};})});t.informes=(t.informes||[]).concat([inf.id]);}
+    if(!t.demo){t.sync='pendiente';}});
+  saveTurnos(a);
+  if(!DEMO)ids.forEach(function(id){queueAdd('turno',id,{auth:authNow()});});
+  var rl=planes.filter(function(p){return porRem[p.r.id];}).map(function(p){return {r:clone(getRemAll().filter(function(x){return x.id===p.r.id;})[0]),acc:'Turno igualado',det:porRem[p.r.id]};}).filter(function(x){return x.r;});
+  if(rl.length)remGuardarVarios(rl);else sync(false);
+  return ids.length;}
+/** vista previa con casillas; al aplicar vuelve a «despues» */
+function modalIgualar(lista,despues){
+  openModal('<h3>Igualar turnos con el control</h3><p class="hint" id="igProg">Trayendo los turnos del servidor…</p>',true);
+  remPreparar(lista).then(function(){
+    var ps=remPlanes(lista),ok=ps.filter(function(p){return /^(actualizar|mover|agregar)$/.test(p.tipo);}),no=ps.filter(function(p){return ok.indexOf(p)<0;});
+    openModal('<h3>Igualar turnos con el control</h3><p class="hint">El remito es el dato correcto: el camión del turno toma la hora de llegada YPF y los litros a 15° de cada cisterna. Cambia el consumo de los turnos tocados; las existencias medidas quedan igual. Todo queda registrado a tu nombre'+(ok.some(function(p){return !(p.org||p.dest).hist;})?' y, en los turnos de operadores, en un informe de redeclaración':'')+'.</p>'+
+      (ok.length?'<div class="tablewrap"><table class="rm-rev"><thead><tr><th><input type="checkbox" id="igTodo" checked aria-label="Todos"></th><th>Remito</th><th>Distrito</th><th>Cambio</th></tr></thead><tbody>'+
+        ok.map(function(p,i){return '<tr><td><input type="checkbox" data-ig="'+i+'" checked></td><td><b>'+esc(p.r.remito)+'</b></td><td>'+esc(D(p.r.dist).n)+'</td><td>'+esc(planTxt(p))+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">No hay turnos para igualar automáticamente.</p>')+
+      '<div id="igCons"></div>'+
+      (no.length?'<details class="rm-hist"'+(ok.length?'':' open')+'><summary>No se pueden igualar automáticamente ('+no.length+')</summary><ul>'+no.map(function(p){return '<li><b>'+esc(p.r.remito)+'</b> · '+esc(D(p.r.dist).n)+': '+esc(planTxt(p))+'</li>';}).join('')+'</ul></details>':'')+
+      '<div class="row-end"><button class="btn" type="button" data-close>Cancelar</button>'+(ok.length?'<button class="btn primary" type="button" id="igOk">Igualar '+ok.length+' camión(es)</button>':'')+'</div>');
+    function selec(){return ok.filter(function(p,i){var c=document.querySelector('[data-ig="'+i+'"]');return c&&c.checked;});}
+    function cons(){var box=$('#igCons');if(!box)return;var sm=remSimular(selec());
+      box.innerHTML=sm.length?'<div class="card block"><h4>Consumo de los turnos que cambian</h4><div class="tablewrap"><table><thead><tr><th>Turno</th><th>Distrito</th><th>Antes</th><th>Después</th></tr></thead><tbody>'+
+        sm.map(function(x){return '<tr><td>'+esc(slotLabel(x.t))+'</td><td>'+esc(D(x.t.dist).n)+'</td><td class="n">'+fmt(x.antes,true)+'</td><td class="n'+(x.despues<0?' rm-bad':'')+'">'+fmt(x.despues,true)+'</td></tr>';}).join('')+'</tbody></table></div>'+
+        (sm.some(function(x){return x.despues<0;})?'<p class="banner err"><span>Algún turno quedaría con consumo negativo: las existencias medidas no cierran con la hora del remito. Revisá esos turnos antes de igualar.</span></p>':'')+'</div>':'';}
+    cons();$('#modalCard').addEventListener('change',function(e){if(e.target.dataset.ig!=null||e.target.id==='igTodo')cons();});
+    if($('#igTodo'))$('#igTodo').addEventListener('change',function(e){$$('[data-ig]').forEach(function(c){c.checked=e.target.checked;});cons();});
+    if($('#igOk'))$('#igOk').addEventListener('click',function(){var sel=selec();if(!sel.length){toast('No marcaste ningún camión.');return;}
+      var n=remAplicar(sel);closeModal();toast(n?n+' turno(s) corregido(s) con el control de remitos.':'No había cambios para hacer.');if(despues)despues();else render();});
+  }).catch(function(e){openModal('<h3>Igualar turnos con el control</h3><p class="banner err"><span>'+esc(e.message||String(e))+'</span></p><div class="row-end"><button class="btn" type="button" data-close>Cerrar</button></div>',true);});
+}
+/* botón dentro de la ficha del remito */
+function remBotonIgualar(orig,o,c){var box=$('#rmDecl');if(!box||!orig||(c.st!=='dif'&&c.st!=='nodecl'))return;
+  if(!orig.conf){box.insertAdjacentHTML('beforeend','<p class="hint">Confirmá la llegada YPF para poder igualar el turno.</p>');return;}
+  box.insertAdjacentHTML('beforeend','<button class="btn small" type="button" id="rmIgualar">Igualar el turno con el remito</button>');
+  $('#rmIgualar').addEventListener('click',function(){var id=orig.id;modalIgualar([orig],function(){render();modalRemito(id);});});}
+
+/* ---------- aviso en el detalle del turno (Calendario) ---------- */
+function remAvisoTurno(id){
+  var t=getTurnos().filter(function(x){return x.id===id;})[0];if(!t||!getRemitos().length)return;
+  var lst=[],vistos={};
+  (t.camiones||[]).forEach(function(c){var r=remDeDist(t.dist,c.remito);if(!r)return;vistos[r.id]=1;var d=difCam(c,camDesdeRem(r,c)),otro=r.fLleg&&(r.fLleg!==t.fecha||slotDeHora(r.hLleg)!==t.turno);
+    if(d.length||otro)lst.push({r:r,txt:(otro?'según el control llegó el '+fFecha(r.fLleg)+' a las '+r.hLleg+' (turno '+slotLabel({fecha:r.fLleg,turno:slotDeHora(r.hLleg)})+')':d.join(' · '))});});
+  remDeSlot(t.dist,t.fecha,t.turno).forEach(function(r){if(!vistos[r.id]&&idxCam(t,r.remito)<0)lst.push({r:r,txt:'Camión '+r.remito+' llegó a las '+r.hLleg+' según el control y no está en este turno'});});
+  var h3=$('#modalCard h3');if(!lst.length||!h3)return;
+  var conf=lst.filter(function(x){return x.r.conf;});
+  h3.insertAdjacentHTML('afterend','<div class="banner warn rm-aviso"><span><b>No coincide con el control de remitos:</b><br>'+lst.map(function(x){return esc(x.r.remito)+': '+esc(x.txt);}).join('<br>')+(conf.length<lst.length?'<br><small>Los remitos sin llegada confirmada no se igualan.</small>':'')+'</span>'+(conf.length?'<button class="btn small" type="button" id="rmIgT">Igualar con el control</button>':'')+'</div>');
+  if($('#rmIgT'))$('#rmIgT').addEventListener('click',function(){modalIgualar(conf.map(function(x){return x.r;}),function(){render();modalTurno(id);});});
+}
+
+/* ---------- carga histórica: camiones completados desde el control ---------- */
+function htDesdeRem(r,base){var est=base?base.est.slice():[],cist=[],dest=base?base.dest.slice():[];
+  for(var k=0;k<NCAM;k++){var v=+((r.cist||[])[k]||0);if(est[k]==='o'){cist.push(0);continue;}est[k]=v>0?'d':'v';cist.push(v>0?v:0);dest[k]='';}
+  return {hora:r.hLleg,remito:r.remito,litros:sum(cist),cist:cist,est:est,dest:dest,parcial:base?!!base.parcial:false,motivo:base?base.motivo||'':'',op:r.pedido||'',entrega:r.entrega||'',fecha:r.fSal||''};}
+function htDif(){if(!HT)return {lst:[],n:0};var lst=[],n=0,vistos={};
+  HT.cams.forEach(function(c,i){var r=remDeDist(HT.dist,c.remito);if(!r)return;vistos[r.id]=1;
+    if(r.fLleg&&(r.fLleg!==HT.fecha||slotDeHora(r.hLleg)!==HT.turno)){lst.push(esc(r.remito)+': según el control llegó el '+fFecha(r.fLleg)+' a las '+esc(r.hLleg)+' (corresponde a otro turno)');return;}
+    var nn=htDesdeRem(r,c),d=[];if((c.hora||'')!==(nn.hora||''))d.push('hora '+(c.hora||'—')+' → '+nn.hora);for(var k=0;k<NCAM;k++){var a=(c.est[k]||'d')==='d'?+(c.cist[k]||0):0;if(c.est[k]!=='o'&&Math.abs(a-nn.cist[k])>0.001)d.push('C'+(k+1)+' '+fmt(a)+' → '+fmt(nn.cist[k]));}
+    if(d.length){lst.push(esc(r.remito)+': '+esc(d.join(' · ')));n++;}});
+  remDeSlot(HT.dist,HT.fecha,HT.turno).forEach(function(r){if(!vistos[r.id]){lst.push(esc(r.remito)+': llegó a las '+esc(r.hLleg)+' según el control y falta en este turno');n++;}});
+  return {lst:lst,n:n};}
+function htIgualar(){HT.cams=HT.cams.map(function(c){var r=remDeDist(HT.dist,c.remito);if(!r||(r.fLleg&&(r.fLleg!==HT.fecha||slotDeHora(r.hLleg)!==HT.turno)))return c;return htDesdeRem(r,c);});
+  var ya={};HT.cams.forEach(function(c){ya[remNorm(c.remito)]=1;});remDeSlot(HT.dist,HT.fecha,HT.turno).forEach(function(r){if(!ya[r.remito])HT.cams.push(htDesdeRem(r,null));});
+  HT.cams.sort(function(a,b){return (a.hora||'')<(b.hora||'')?-1:1;});}
+function remAvisoHT(){if(!HT||!getRemitos().length)return;var card=$('#modalCard'),h4=null;$$('#modalCard h4').forEach(function(x){if(!h4&&x.textContent==='Camiones')h4=x;});
+  var d=htDif();
+  if(h4)h4.insertAdjacentHTML('afterend',d.lst.length?'<div class="banner warn rm-aviso"><span><b>Control de remitos:</b><br>'+d.lst.join('<br>')+'</span>'+(d.n?'<button class="btn small" type="button" id="htIgual">Igualar camiones con el control</button>':'')+'</div>':
+    (HT.cams.length&&HT.cams.every(function(c){return remDeDist(HT.dist,c.remito);})?'<p class="banner ok"><span>Los camiones coinciden con el control de remitos.</span></p>':''));
+  if($('#htIgual'))$('#htIgual').addEventListener('click',function(){htIgualar();pintarHT();toast('Camiones igualados con el control. Revisá y tocá «Guardar».');});
+  /* al escribir un remito que está en el control se completan hora y cisternas */
+  card.addEventListener('change',function(e){var el=e.target;if(el.dataset.hk!=='remito')return;var i=+el.dataset.hi,c=HT.cams[i],r=remDeDist(HT.dist,el.value);if(!c||!r)return;
+    HT.cams[i]=htDesdeRem(r,c);pintarHT();toast('Remito '+r.remito+': hora y litros completados desde el control.');});
 }
 
 })();
