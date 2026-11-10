@@ -482,6 +482,8 @@ td.rm-bad,.rm-bad{color:var(--danger);font-weight:600}
 .rm-ofi>.btn{align-self:flex-start;margin-top:4px}
 .rm-corr{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
 .rm-corr .btn{align-self:flex-start}
+.rm-st .field{max-width:240px}
+.rm-st,.rm-cist{margin-top:8px}
 </style>
 </head>
 <body>
@@ -4047,6 +4049,9 @@ function soloDig(v){return String(v==null?'':v).replace(/\D/g,'').replace(/^0+(?
 function remHora(v){var m=/^(\d{1,2})[:.](\d{2})/.exec(String(v||'').trim());return m&&+m[1]<24&&+m[2]<60?pad2(+m[1])+':'+m[2]:'';}
 function remLit(v){if(v==null||v==='')return null;if(typeof v==='number')return isNaN(v)?null:v;var s=String(v).trim().replace(/\s/g,'');if(!s)return null;
   if(/,\d{1,3}$/.test(s)&&!/,\d{3}$/.test(s))s=s.replace(/\./g,'').replace(',','.');else s=s.replace(/[.,](?=\d{3}(\D|$))/g,'').replace(',','.');var n=+s;return isNaN(n)?null:n;}
+/** si una «cisterna» tiene más de 15.000 L es el total de la factura cargado en la 001: pasa a «solo total» */
+var REM_MAXCIST=15000;
+function normSoloTotal(o){if(o.soloTotal||!o.cist||!o.cist.some(function(v){return v!=null&&+v>REM_MAXCIST;}))return false;o.total=remTotal(o.cist);o.soloTotal=true;o.cist=[null,null,null,null,null,null,null];return true;}
 function remTotal(c){var t=0,h=false;(c||[]).forEach(function(v){if(v!=null&&v!==''){t+=+v;h=true;}});return h?Math.round(t*100)/100:null;}
 
 /* ---------- almacenamiento y envío ---------- */
@@ -4057,7 +4062,7 @@ function nuevoRem(){var c=[];for(var i=0;i<NCAM;i++)c.push(null);return {id:uid(
 function remPorRemito(rem,exc){rem=remNorm(rem);if(!rem)return null;return getRemitos().filter(function(r){return r.remito===rem&&r.id!==exc;})[0]||null;}
 /** guarda varios registros de una vez (una sola escritura de la cola) */
 function remGuardarVarios(lista){if(!lista.length)return;var u=me(),ts=new Date().toISOString(),a=getRemAll(),ix={};a.forEach(function(r,i){ix[r.id]=i;});
-  lista.forEach(function(x){var r=x.r;r.total=remTotal(r.cist);r.upd=ts;r.por={nombre:u.nombre,legajo:u.legajo};r.hist=(r.hist||[]).concat([{ts:ts,por:u.nombre,acc:x.acc,det:x.det||''}]);
+  lista.forEach(function(x){var r=x.r;r.total=r.soloTotal?(r.total==null?null:+r.total):remTotal(r.cist);r.upd=ts;r.por={nombre:u.nombre,legajo:u.legajo};r.hist=(r.hist||[]).concat([{ts:ts,por:u.nombre,acc:x.acc,det:x.det||''}]);
     if(DEMO)r.demo=true;if(ix[r.id]!=null)a[ix[r.id]]=r;else{ix[r.id]=a.length;a.push(r);}});
   saveRemitos(a);
   if(!DEMO){var q=getQueue(),au=authNow();lista.forEach(function(x){var ya=q.filter(function(y){return y.k==='remito'&&y.id===x.r.id;})[0];if(ya)ya.auth=au;else q.push({k:'remito',id:x.r.id,auth:au});});sset('cpt.queue',q);sync(false);}
@@ -4105,7 +4110,8 @@ function remCruce(r,idx){
   if(r.hLleg&&c.hora!==r.hLleg)d.push('Hora: el distrito declaró '+(c.hora||'—')+' y el control tiene '+r.hLleg);
   for(var k=0;k<NCAM;k++){if((c.est||[])[k]==='o'){der.push({k:k+1,d:(c.dest||[])[k]});continue;}
     var v=(+(c.cist||[])[k]||0)+(+(c.rech||[])[k]||0),x=+(r.cist||[])[k]||0;tot+=v;
-    if(Math.abs(v-x)>0.001)d.push('Cisterna '+(k+1)+': el distrito declaró '+fmt(v)+' L y el remito dice '+fmt(x)+' L');}
+    if(!r.soloTotal&&Math.abs(v-x)>0.001)d.push('Cisterna '+(k+1)+': el distrito declaró '+fmt(v)+' L y el remito dice '+fmt(x)+' L');}
+  if(r.soloTotal&&r.total!=null&&Math.abs(tot-r.total)>0.001)d.push('Total: el distrito declaró '+fmt(tot)+' L y la factura dice '+fmt(r.total)+' L');
   if(l.length>1)d.push('El distrito cargó este remito '+l.length+' veces');
   return {st:d.length?'dif':'ok',dif:d,c:c,der:der,tot:tot};
 }
@@ -4213,14 +4219,14 @@ function semillaDe(rem){if(typeof REM_SEED==='undefined')return null;rem=remNorm
 function completarDeSemilla(o,x){var ch=[];
   [['pedido',2],['entrega',3],['fSal',4],['hSal',5]].forEach(function(k){if(!o[k[0]]&&x[k[1]]){o[k[0]]=x[k[1]];ch.push(k[0]);}});
   if(!o.dist&&x[1]){o.dist=x[1];ch.push('dist');}
-  if(o.cist.every(function(v){return v==null;})&&x[8].some(function(v){return v!=null;})){o.cist=x[8].slice();ch.push('cisternas');}
+  if(!o.soloTotal&&o.cist.every(function(v){return v==null;})&&x[8].some(function(v){return v!=null;})){o.cist=x[8].slice();normSoloTotal(o);ch.push('cisternas');}
   if(!o.fLleg&&x[6]&&x[7]&&!remBloq(o)){o.fLleg=x[6];o.hLleg=x[7];ch.push('llegada');}
   if(o.fLleg&&o.hLleg&&!o.conf&&ch.indexOf('llegada')>=0)o.conf=confAuto('Excel');
   return ch;}
 function remSembrar(){if(typeof REM_SEED==='undefined'||sget('cpt.remSeed',0)>=REM_SEED_V||!me())return;
   var por={},lista=[];getRemitos().forEach(function(r){por[r.remito]=r;});
   REM_SEED.forEach(function(x){var r=por[x[0]];
-    if(!r){var o=nuevoRem();o.id='rm-'+x[0].replace(/\D/g,'');o.remito=x[0];o.dist=x[1];o.pedido=x[2];o.entrega=x[3];o.fSal=x[4];o.hSal=x[5];o.fLleg=x[6];o.hLleg=x[7];o.cist=x[8].slice();if(o.fLleg&&o.hLleg)o.conf=confAuto('Excel');
+    if(!r){var o=nuevoRem();o.id='rm-'+x[0].replace(/\D/g,'');o.remito=x[0];o.dist=x[1];o.pedido=x[2];o.entrega=x[3];o.fSal=x[4];o.hSal=x[5];o.fLleg=x[6];o.hLleg=x[7];o.cist=x[8].slice();normSoloTotal(o);if(o.fLleg&&o.hLleg)o.conf=confAuto('Excel');
       lista.push({r:o,acc:'Importado del Excel',det:'carga inicial'});return;}
     var o2=clone(r),ch=completarDeSemilla(o2,x);if(ch.length)lista.push({r:o2,acc:'Completado desde el Excel',det:ch.join(', ')});});
   sset('cpt.remSeed',REM_SEED_V);
@@ -4229,6 +4235,7 @@ function remSembrar(){if(typeof REM_SEED==='undefined'||sget('cpt.remSeed',0)>=R
 /* lo importado antes de esta versión (llegada del Excel o del portal sin confirmar) pasa a confirmado como dato de YPF */
 function remMigrar(){var ACC=/^(Importado del Excel|Actualizado desde Excel|Cargado desde archivo|Datos de archivo)$/,lista=[];
   getRemitos().forEach(function(r){var o=null;if(!r.fLleg&&r.ypf&&r.ypf.f&&r.ypf.h){o=clone(r);o.fLleg=r.ypf.f;o.hLleg=r.ypf.h;}
+    if(!r.soloTotal&&(r.cist||[]).some(function(v){return v!=null&&+v>REM_MAXCIST;})){o=o||clone(r);normSoloTotal(o);lista.push({r:o,acc:'Pasa a solo total',det:'la cisterna 001 tenía el total de la factura'});return;}
     var x=o||r;if(!x.conf&&x.fLleg&&x.hLleg&&(x.hist||[]).length&&x.hist.every(function(h){return ACC.test(h.acc);})){o=o||clone(r);o.conf=confAuto(x.hist.some(function(h){return /Excel/.test(h.acc);})?'Excel':'Portal YPF');}
     if(o)lista.push({r:o,acc:'Confirmado automáticamente',det:'llegada tomada de YPF'});});
   if(lista.length)remGuardarVarios(lista);}
@@ -4247,7 +4254,10 @@ function modalRemito(id,pre){
       '<div class="field"><label for="rmE">Entrega</label><input id="rmE" inputmode="numeric" value="'+esc(r.entrega)+'"'+dis+'></div>'+
       '<div class="field"><label for="rmFS">Fecha de salida</label><input id="rmFS" type="date" value="'+esc(r.fSal)+'"'+dis+'></div>'+
       '<div class="field"><label for="rmHS">Hora de salida</label><input id="rmHS" type="time" value="'+esc(r.hSal)+'"'+dis+'></div></div>'+
-    '<div class="block"><h4>Cantidad a 15° por cisterna (L)</h4><p class="hint">Salida, pedido, entrega y litros son datos del remito PDF de YPF.</p><div class="rm-cist">'+cist+'<div class="field"><label>Total</label><output id="rmTot" class="rm-tot"></output></div></div></div>'+
+    '<div class="block"><h4>Cantidad a 15° por cisterna (L)</h4><p class="hint">Salida, pedido, entrega y litros son datos del remito PDF de YPF.</p>'+
+      '<label class="rm-chk"><input type="checkbox" id="rmST"'+(r.soloTotal?' checked':'')+dis+'> Sin remito digital: tengo solo el total (por ejemplo, de la factura)</label>'+
+      '<div class="rm-cist" id="rmCistBox"'+(r.soloTotal?' hidden':'')+'>'+cist+'<div class="field"><label>Total</label><output id="rmTot" class="rm-tot"></output></div></div>'+
+      '<div class="rm-st" id="rmSTBox"'+(r.soloTotal?'':' hidden')+'><div class="field"><label for="rmTM">Total a 15° (L)</label><input id="rmTM" inputmode="decimal" value="'+(r.soloTotal&&r.total!=null?esc(r.total):'')+'"'+dis+'></div><p class="hint">Sin el detalle por cisterna se compara solo el total con lo que declaró el distrito, y al igualar el turno se corrige solo la hora.</p></div></div>'+
     '<div class="block"><h4>Llegada</h4><div class="rm-cmp">'+
       '<div class="card rm-ofi"><b>Llegada</b><p class="hint">La carga la oficina (columnas F y H del Excel, o fecha y hora de entrega del portal) y la declara el distrito en su turno.</p><div class="grid2"><input id="rmFL" type="date" aria-label="Fecha de llegada" value="'+esc(r.fLleg)+'"'+dis+'><input id="rmHL" type="time" aria-label="Hora de llegada" value="'+esc(r.hLleg)+'"'+dis+'></div>'+
         (ro?'<button class="btn small" type="button" id="rmCorr">Corregir llegada…</button>'+
@@ -4266,9 +4276,9 @@ function modalRemito(id,pre){
       (ro?'<button class="btn primary" type="button" id="rmReab">Reabrir…</button>':'<button class="btn" type="button" id="rmSave">Guardar</button><button class="btn primary" type="button" id="rmConf">Guardar y confirmar llegada</button>')+'</div>');
   var msg=$('#rmMsg');
   function leer(){var o=clone(r);o.dist=$('#rmD').value;o.remito=remNorm($('#rmR').value)||$('#rmR').value.trim();o.pedido=soloDig($('#rmP').value);o.entrega=soloDig($('#rmE').value);
-    o.fSal=$('#rmFS').value;o.hSal=$('#rmHS').value;for(var k=0;k<NCAM;k++)o.cist[k]=remLit($('#rmC'+k).value);o.total=remTotal(o.cist);
+    o.fSal=$('#rmFS').value;o.hSal=$('#rmHS').value;for(var k=0;k<NCAM;k++)o.cist[k]=remLit($('#rmC'+k).value);o.soloTotal=$('#rmST').checked;if(o.soloTotal){o.cist=[null,null,null,null,null,null,null];o.total=remLit($('#rmTM').value);}else o.total=remTotal(o.cist);
     o.fLleg=$('#rmFL').value;o.hLleg=$('#rmHL').value;o.obs=$('#rmObs').value.trim();return o;}
-  function pintar(){var o=leer();$('#rmTot').textContent=o.total!=null?fmt(o.total)+' L':'—';
+  function pintar(){var o=leer();$('#rmCistBox').hidden=o.soloTotal;$('#rmSTBox').hidden=!o.soloTotal;$('#rmTot').textContent=o.total!=null?fmt(o.total)+' L':'—';
     var c=remCruce(o,camIndex()),dc=c.c;
     $('#rmDecl').innerHTML='<b>Declaró el distrito</b>'+(dc?'<p class="hint">Turno '+esc(slotLabel({fecha:dc.fecha,turno:dc.turno}))+(dc.por?' · '+esc(dc.por):'')+'</p><p class="rm-big">'+fFecha(dc.fecha)+' · '+esc(dc.hora||'—')+'</p><p class="hint">'+fmt(c.tot)+' L a 15°</p>':'<p class="hint">'+(c.st==='nodecl'?'El distrito todavía no cargó este remito en ningún turno.':'Sin datos del distrito para esta fecha (tocá «Actualizar» en la pantalla de Remitos).')+'</p>');
     if(typeof remBotonIgualar==='function')remBotonIgualar(orig,o,c);
@@ -4278,8 +4288,8 @@ function modalRemito(id,pre){
   pintar();
   var f0=r.fLleg||r.fSal;if(f0&&!DEMO&&cfg.syncUrl&&navigator.onLine&&!camCubre(f0,true)&&!REM_CAM.cargando){$('#rmDecl').insertAdjacentHTML('beforeend','<p class="hint">Trayendo lo que declaró el distrito…</p>');
     traerCamiones(addDays(f0,-3),addDays(f0,10)).then(function(){if($('#rmDecl'))pintar();});}
-  $('#modalCard').addEventListener('input',function(e){if(e.target.id&&/^rm(C\d|FL|HL|FS|HS|D|R)$/.test(e.target.id))pintar();});
-  $('#modalCard').addEventListener('change',function(e){if(/^rm(D|FL|HL|FS|HS)$/.test(e.target.id))pintar();});
+  $('#modalCard').addEventListener('input',function(e){if(e.target.id&&/^rm(C\d|FL|HL|FS|HS|D|R|TM)$/.test(e.target.id))pintar();});
+  $('#modalCard').addEventListener('change',function(e){if(/^rm(D|FL|HL|FS|HS|ST)$/.test(e.target.id))pintar();});
   function validar(o,conf){
     if(!o.dist)return 'Elegí el distrito.';if(!/^\d{4}-\d{8}$/.test(o.remito))return 'El remito debe tener el formato 0000-00000000.';
     var otro=remPorRemito(o.remito,o.id);if(otro)return 'El remito '+o.remito+' ya está cargado ('+(D(otro.dist)?D(otro.dist).n:otro.dist)+').';
@@ -4290,6 +4300,7 @@ function modalRemito(id,pre){
     return '';}
   function cambios(a,b){var ch=[],L={dist:'Distrito',remito:'Remito',pedido:'Pedido',entrega:'Entrega',fSal:'Fecha salida',hSal:'Hora salida',fLleg:'Fecha de llegada',hLleg:'Hora de llegada',obs:'Observaciones'};
     Object.keys(L).forEach(function(k){if((a[k]||'')!==(b[k]||''))ch.push(L[k]+' '+(k.charAt(0)==='f'&&a[k]?fFecha(a[k]):a[k]||'—')+' → '+(k.charAt(0)==='f'&&b[k]?fFecha(b[k]):b[k]||'—'));});
+    if(!!a.soloTotal!==!!b.soloTotal)ch.push(b.soloTotal?'Pasa a solo total':'Pasa a detalle por cisterna');if((a.total==null?null:+a.total)!==(b.total==null?null:+b.total))ch.push('Total '+(a.total!=null?fmt(a.total):'—')+' → '+(b.total!=null?fmt(b.total):'—'));
     for(var k=0;k<NCAM;k++)if((a.cist[k]==null?null:+a.cist[k])!==(b.cist[k]==null?null:+b.cist[k]))ch.push('Cisterna '+(k+1)+' '+(a.cist[k]!=null?fmt(a.cist[k]):'—')+' → '+(b.cist[k]!=null?fmt(b.cist[k]):'—'));
     return ch;}
   function guardar(conf){var o=leer(),e=validar(o,conf);if(e){msg.textContent=e;return;}
@@ -4361,7 +4372,7 @@ function datosDeTexto(t,nombre,ocr){
     if((m=/Transporte\s*:?\s*(\d{6,8})/i.exec(T)))o.transp=m[1];
     var i0=T.search(/Fecha\s+de\s+entrega/i);
     if(i0>=0){var resto=T.slice(i0);if((m=/Fecha\s+de\s+entrega\s*:?\s*\n?\s*(\d{1,2})\s*[-\/.]\s*(\d{1,2})\s*[-\/.]\s*(\d{4})/i.exec(resto)))o.yF=dmyISO(m[1],m[2],m[3]);
-      if((m=/\bHora\s*:\s*(\d{1,2})\s*[:.]\s*(\d{2})/i.exec(resto)))o.yH=pad2(+m[1])+':'+m[2];}
+      if((m=/\bHora\s*:\s*(\d{1,2})\s*[:.]\s*(\d{2})\s*([ap])?\.?\s*m?\.?/i.exec(resto))){var hh=+m[1];if(m[3]){var pm=/p/i.test(m[3]);if(pm&&hh<12)hh+=12;if(!pm&&hh===12)hh=0;}o.yH=pad2(hh)+':'+m[2];}}
   }else if(tipo==='guia'){
     if((m=/Fecha\s+y\s+Hora\s*:\s*(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})/i.exec(T)))o.carga={f:dmyISO(m[1],m[2],m[3]),h:pad2(+m[4])+':'+m[5]};
     if((m=/Transporte\s*:\s*0*(\d{4,})/i.exec(T)))o.transp=m[1];
@@ -4432,6 +4443,7 @@ function revisarArchivos(ds){
       sel.forEach(function(k){var el=document.querySelector('[data-g="'+gi+'"][data-k="'+k+'"]'),v=el?el.value.trim():'';
         if(/^c\d$/.test(k))o.cist[+k.slice(1)]=remLit(v);
         else if(k==='remito')o.remito=remNorm(v);else if(k==='pedido'||k==='entrega')o[k]=soloDig(v);else if(k==='hSal'||k==='hLleg')o[k]=remHora(v);else o[k]=v;ch.push(k);});
+      if(o.soloTotal&&sel.some(function(k){return /^c\d$/.test(k);})){o.soloTotal=false;}
       if(!o.dist&&m.dist)o.dist=m.dist;if(!o.remito&&m.remito)o.remito=m.remito;if(m.carga)o.carga=m.carga;if(m.transp&&!o.transp)o.transp=m.transp;
       if(!/^\d{4}-\d{8}$/.test(o.remito||'')){err='Falta el N° de remito de un camión ('+m.archivos.map(function(d){return d.archivo;}).join(', ')+').';return;}
       if(!o.dist){err='Falta el distrito del remito '+o.remito+'.';return;}
@@ -4470,7 +4482,8 @@ function filasExcelRem(hojas){var out=[],errs=[];
     for(var i2=hi+1;i2<h.rows.length;i2++){var r2=h.rows[i2];if(!r2)continue;var rem=remNorm(g(r2,'REMITO'));if(!rem)continue;
       var dn=g(r2,'DISTRITO'),dc=distDeNombre(dn);if(!dc)errs.push('Fila '+(i2+1)+': distrito «'+(dn||'')+'» desconocido (remito '+rem+')');
       var ci=cj.map(function(j){return j==null?null:remLit(r2[j]);});
-      out.push({fila:i2+1,remito:rem,dist:dc,pedido:soloDig(g(r2,'PEDIDO')),entrega:soloDig(g(r2,'ENTREGA')),fSal:xFecha(g(r2,'FECHA DE SALIDA')),hSal:xHora(g(r2,'HORA DE SALIDA')),fLleg:xFecha(g(r2,'FECHA DE LLEGADA')),hLleg:xHora(g(r2,'HORA DE LLEGADA')),cist:ci});}});
+      var tmp={cist:ci};if(normSoloTotal(tmp)){ci=tmp.cist;}
+      out.push({soloTotal:!!tmp.soloTotal,total:tmp.soloTotal?tmp.total:null,fila:i2+1,remito:rem,dist:dc,pedido:soloDig(g(r2,'PEDIDO')),entrega:soloDig(g(r2,'ENTREGA')),fSal:xFecha(g(r2,'FECHA DE SALIDA')),hSal:xHora(g(r2,'HORA DE SALIDA')),fLleg:xFecha(g(r2,'FECHA DE LLEGADA')),hLleg:xHora(g(r2,'HORA DE LLEGADA')),cist:ci});}});
   return {filas:out,errs:errs};}
 function importarExcelRem(file){
   toast('Leyendo '+file.name+'…');
@@ -4481,17 +4494,18 @@ function compararExcelRem(x,nombre){
   var porRem={},nuevos=[],iguales=0,dist=[],vistos={},repe=[];getRemitos().forEach(function(r){porRem[r.remito]=r;});
   x.filas.forEach(function(f){if(vistos[f.remito]){repe.push(f.remito);return;}vistos[f.remito]=1;if(!f.dist)return;var r=porRem[f.remito];if(!r){nuevos.push(f);return;}
     var d=[];REM_CMP.forEach(function(c){var v=f[c[0]];if(v==null||v==='')return;if(String(r[c[0]]||'')!==String(v))d.push({k:c[0],l:c[1],a:r[c[0]],b:v});});
-    for(var k=0;k<NCAM;k++){var v=f.cist[k];if(v==null)continue;if(r.cist[k]==null||Math.abs(+r.cist[k]-v)>0.001)d.push({k:'c'+k,l:'Cisterna 00'+(k+1),a:r.cist[k],b:v});}
+    if(f.soloTotal){if(f.total!=null&&(r.total==null||Math.abs(+r.total-f.total)>0.001))d.push({k:'tot',l:'Total (solo factura)',a:r.total,b:f.total});}
+    else for(var k=0;k<NCAM;k++){var v=f.cist[k];if(v==null)continue;if(r.cist[k]==null||Math.abs(+r.cist[k]-v)>0.001)d.push({k:'c'+k,l:'Cisterna 00'+(k+1),a:r.cist[k],b:v});}
     if(d.length)dist.push({f:f,r:r,d:d,bloq:remBloq(r)});else iguales++;});
   var enApp=getRemitos().filter(function(r){return !vistos[r.remito];}).length;
-  var vv=function(k,v){if(v==null||v==='')return '—';if(k==='dist')return D(v)?D(v).n:v;if(k.charAt(0)==='f')return fFecha(v);if(/^c\d$/.test(k))return fmt(v);return v;};
+  var vv=function(k,v){if(v==null||v==='')return '—';if(k==='dist')return D(v)?D(v).n:v;if(k.charAt(0)==='f')return fFecha(v);if(/^(c\d|tot)$/.test(k))return fmt(v);return v;};
   openModal('<h3>Comparación con '+esc(nombre)+'</h3>'+
     '<div class="stats"><div class="stat"><b>'+x.filas.length+'</b><span>Filas del Excel</span></div><div class="stat"><b>'+nuevos.length+'</b><span>Nuevos</span></div><div class="stat"><b>'+dist.length+'</b><span>Con datos distintos</span></div><div class="stat"><b>'+iguales+'</b><span>Iguales</span></div><div class="stat"><b>'+enApp+'</b><span>Solo en la app</span></div></div>'+
     (x.errs.length?'<div class="banner warn"><span><b>Filas sin distrito reconocido (no se importan):</b><br>'+x.errs.slice(0,12).map(esc).join('<br>')+(x.errs.length>12?'<br>…y '+(x.errs.length-12)+' más':'')+'</span></div>':'')+
     (function(){var sq=x.filas.filter(function(f){return remSospecha(f);});return sq.length?'<div class="banner err"><span><b>'+sq.length+' fila(s) con la llegada para revisar</b> (se importan igual y quedan marcadas):<br>'+sq.slice(0,15).map(function(f){return esc(f.remito)+' · fila '+f.fila+': '+esc(remSospecha(f));}).join('<br>')+(sq.length>15?'<br>…y '+(sq.length-15)+' más':'')+'</span></div>':'';})()+
     (repe.length?'<p class="hint">Remitos repetidos en el Excel (se toma la primera fila): '+esc(repe.join(', '))+'</p>':'')+
     (nuevos.length?'<div class="card block"><label class="rm-chk"><input type="checkbox" id="ixNue" checked> <b>Agregar los '+nuevos.length+' remitos nuevos</b></label><details><summary>Ver lista</summary><div class="tablewrap"><table><thead><tr><th>Salida</th><th>Distrito</th><th>Remito</th><th>Llegada</th><th>Litros a 15°</th></tr></thead><tbody>'+
-      nuevos.slice(0,400).map(function(f){return '<tr><td>'+fFecha(f.fSal)+' '+esc(f.hSal)+'</td><td>'+esc(D(f.dist).n)+'</td><td>'+esc(f.remito)+'</td><td>'+(f.fLleg?fFecha(f.fLleg)+' '+esc(f.hLleg):'—')+'</td><td class="n">'+fmt(remTotal(f.cist))+'</td></tr>';}).join('')+'</tbody></table></div></details></div>':'')+
+      nuevos.slice(0,400).map(function(f){return '<tr><td>'+fFecha(f.fSal)+' '+esc(f.hSal)+'</td><td>'+esc(D(f.dist).n)+'</td><td>'+esc(f.remito)+'</td><td>'+(f.fLleg?fFecha(f.fLleg)+' '+esc(f.hLleg):'—')+'</td><td class="n">'+fmt(f.soloTotal?f.total:remTotal(f.cist))+'</td></tr>';}).join('')+'</tbody></table></div></details></div>':'')+
     (dist.length?'<div class="card block"><h4>Datos distintos: elegí cuáles tomar del Excel</h4><p class="hint">Sin marcar, queda lo que tiene la app. Los remitos confirmados a mano no se cambian desde acá: reabrilos primero.</p><div class="tablewrap"><table class="rm-rev"><thead><tr><th>Usar Excel</th><th>Remito</th><th>Dato</th><th>En la app</th><th>En el Excel</th></tr></thead><tbody>'+
       dist.map(function(o,i){return o.d.map(function(d,j){return '<tr><td><input type="checkbox" data-ix="'+i+'|'+j+'"'+(o.bloq?' disabled':'')+'></td><td>'+(j?'':'<b>'+esc(o.r.remito)+'</b>'+(o.bloq?' <span class="chip g">Confirmado a mano</span>':''))+'</td><td>'+esc(d.l)+'</td><td>'+esc(vv(d.k,d.a))+'</td><td>'+esc(vv(d.k,d.b))+'</td></tr>';}).join('');}).join('')+'</tbody></table></div>'+
       '<div class="row-end"><button class="ghost small" type="button" id="ixTodo">Marcar todos</button></div></div>':'')+
@@ -4500,9 +4514,9 @@ function compararExcelRem(x,nombre){
   if($('#ixTodo'))$('#ixTodo').addEventListener('click',function(){$$('[data-ix]').forEach(function(c){if(!c.disabled)c.checked=true;});});
   if(!$('#ixOk'))return;
   $('#ixOk').addEventListener('click',function(){var lista=[];
-    if(nuevos.length&&$('#ixNue').checked)nuevos.forEach(function(f){var o=nuevoRem();['remito','dist','pedido','entrega','fSal','hSal','fLleg','hLleg'].forEach(function(k){o[k]=f[k]||'';});o.cist=f.cist.slice();if(o.fLleg&&o.hLleg)o.conf=confAuto('Excel');lista.push({r:o,acc:'Importado del Excel',det:nombre+' (fila '+f.fila+')'});});
+    if(nuevos.length&&$('#ixNue').checked)nuevos.forEach(function(f){var o=nuevoRem();['remito','dist','pedido','entrega','fSal','hSal','fLleg','hLleg'].forEach(function(k){o[k]=f[k]||'';});o.cist=f.cist.slice();if(f.soloTotal){o.soloTotal=true;o.total=f.total;}if(o.fLleg&&o.hLleg)o.conf=confAuto('Excel');lista.push({r:o,acc:'Importado del Excel',det:nombre+' (fila '+f.fila+')'});});
     dist.forEach(function(o,i){if(o.bloq)return;var sel=o.d.filter(function(d,j){var c=document.querySelector('[data-ix="'+i+'|'+j+'"]');return c&&c.checked;});if(!sel.length)return;
-      var r=clone(o.r);sel.forEach(function(d){if(/^c\d$/.test(d.k))r.cist[+d.k.slice(1)]=d.b;else r[d.k]=d.b;});if(r.fLleg&&r.hLleg&&!r.conf)r.conf=confAuto('Excel');
+      var r=clone(o.r);sel.forEach(function(d){if(d.k==='tot'){r.soloTotal=true;r.total=d.b;r.cist=[null,null,null,null,null,null,null];}else if(/^c\d$/.test(d.k))r.cist[+d.k.slice(1)]=d.b;else r[d.k]=d.b;});if(r.fLleg&&r.hLleg&&!r.conf)r.conf=confAuto('Excel');
       lista.push({r:r,acc:'Actualizado desde Excel',det:nombre+': '+sel.map(function(d){return d.l+' '+vv(d.k,d.a)+' → '+vv(d.k,d.b);}).join('; ')});});
     if(!lista.length){toast('No marcaste nada para aplicar.');return;}
     remGuardarVarios(lista);closeModal();if(remF.mes&&!lista.some(function(x){return (x.r.fSal||'').slice(0,7)===remF.mes;}))remF.mes='';
@@ -4547,6 +4561,8 @@ function remDeSlot(dist,f,t){return getRemitos().filter(function(r){return r.dis
 function remDeDist(dist,rem){rem=remNorm(rem);return getRemitos().filter(function(r){return r.dist===dist&&r.remito===rem;})[0]||null;}
 /** camión del turno (formato guardado) con los datos del remito; conserva las cisternas derivadas y las rechazadas */
 function camDesdeRem(r,base){
+  /* remito sin detalle por cisterna (solo el total de la factura): del camión solo se corrige la hora */
+  if(r.soloTotal&&base){var cb=clone(base);cb.hora=r.hLleg;cb.remito=r.remito;if(!cb.op)cb.op=r.pedido||'';if(!cb.entrega)cb.entrega=r.entrega||'';if(!cb.fecha)cb.fecha=r.fSal||'';return cb;}
   var c=base?clone(base):{hora:'',remito:r.remito,litros:0,op:'',entrega:'',fecha:'',cisternas:[],rechazos:[],estados:[],destinos:[],foto:null,parcial:false,motivo:''};
   var est=camEstados(c),cis=[],rec=[],des=(c.destinos||[]).slice();
   for(var k=0;k<NCAM;k++){var v=+((r.cist||[])[k]||0),e=est[k]||'';
@@ -4568,6 +4584,7 @@ function remPlan(r,idx,map){
   if(!r.conf||!r.fLleg||!r.hLleg||!r.dist||!r.remito)return null;
   var c=remCruce(r,idx);if(c.st!=='dif'&&c.st!=='nodecl')return null;
   var td=map[r.dist+'#'+r.fLleg+'#'+slotDeHora(r.hLleg)]||null,rot={fecha:r.fLleg,turno:slotDeHora(r.hLleg)};
+  if(c.st==='nodecl'&&r.soloTotal)return {tipo:'sintotal',r:r};
   if(c.st==='nodecl')return td?{tipo:'agregar',r:r,dest:td}:{tipo:'sinturno',r:r,slot:rot};
   var org=getTurnos().filter(function(t){return t.id===c.c.tid;})[0];
   if(!org||idxCam(org,r.remito)<0)return {tipo:'nolocal',r:r};
@@ -4576,10 +4593,11 @@ function remPlan(r,idx,map){
   return {tipo:td.id===org.id?'actualizar':'mover',r:r,org:org,dest:td};
 }
 function planTxt(p){var r=p.r;
-  if(p.tipo==='actualizar'){var a=p.org.camiones[idxCam(p.org,r.remito)];return difCam(a,camDesdeRem(r,a)).join(' · ')||'Sin cambios';}
+  if(p.tipo==='actualizar'){var a=p.org.camiones[idxCam(p.org,r.remito)],tx=difCam(a,camDesdeRem(r,a)).join(' · ');if(r.soloTotal&&!tx)return 'Solo hay total de factura: la diferencia de litros se corrige a mano.';return (tx||'Sin cambios')+(r.soloTotal?' (los litros no se tocan: solo hay total de factura)':'');}
   if(p.tipo==='mover'){var a2=p.org.camiones[idxCam(p.org,r.remito)],n=camDesdeRem(r,a2),d=difCam(a2,n);return 'Pasa del turno '+slotLabel(p.org)+' al '+slotLabel(p.dest)+(d.length?' · '+d.join(' · '):'');}
   if(p.tipo==='agregar'){var n2=camDesdeRem(r,null);return 'Se agrega al turno '+slotLabel(p.dest)+': '+n2.hora+' · '+fmt(n2.litros)+' L';}
   if(p.tipo==='sinturno')return 'El turno '+slotLabel(p.slot)+' todavía no está cargado'+(p.org?' (el distrito lo declaró en el '+slotLabel(p.org)+')':'')+'. Cargalo en Histórico: los camiones se completan solos con el control.';
+  if(p.tipo==='sintotal')return 'El distrito no lo cargó y el remito no tiene el detalle por cisterna: agregá el camión a mano en el turno.';
   if(p.tipo==='doble')return 'El remito figura en dos turnos ('+slotLabel(p.org)+' y '+slotLabel(p.dest)+'). Corregilo a mano.';
   return 'No se encontró el turno en este equipo.';}
 /** consumo que quedaría en cada turno tocado (con todos los cambios marcados) */
@@ -4630,7 +4648,7 @@ function remAplicar(planes){
 function modalIgualar(lista,despues){
   openModal('<h3>Igualar turnos con el control</h3><p class="hint" id="igProg">Trayendo los turnos del servidor…</p>',true);
   remPreparar(lista).then(function(){
-    var ps=remPlanes(lista),ok=ps.filter(function(p){return /^(actualizar|mover|agregar)$/.test(p.tipo);}),no=ps.filter(function(p){return ok.indexOf(p)<0;});
+    var ps=remPlanes(lista),ok=ps.filter(function(p){if(p.tipo==='actualizar'&&p.r.soloTotal){var a=p.org.camiones[idxCam(p.org,p.r.remito)];return difCam(a,camDesdeRem(p.r,a)).length>0;}return /^(actualizar|mover|agregar)$/.test(p.tipo);}),no=ps.filter(function(p){return ok.indexOf(p)<0;});
     openModal('<h3>Igualar turnos con el control</h3><p class="hint">El remito es el dato correcto: el camión del turno toma la hora de llegada y los litros a 15° de cada cisterna. Cambia el consumo de los turnos tocados; las existencias medidas quedan igual. Todo queda registrado a tu nombre'+(ok.some(function(p){return !(p.org||p.dest).hist;})?' y, en los turnos de operadores, en un informe de redeclaración':'')+'.</p>'+
       (ok.length?'<div class="tablewrap"><table class="rm-rev"><thead><tr><th><input type="checkbox" id="igTodo" checked aria-label="Todos"></th><th>Remito</th><th>Distrito</th><th>Cambio</th></tr></thead><tbody>'+
         ok.map(function(p,i){return '<tr><td><input type="checkbox" data-ig="'+i+'" checked></td><td><b>'+esc(p.r.remito)+'</b></td><td>'+esc(D(p.r.dist).n)+'</td><td>'+esc(planTxt(p))+'</td></tr>';}).join('')+'</tbody></table></div>':'<p class="empty">No hay turnos para igualar automáticamente.</p>')+
@@ -4650,6 +4668,7 @@ function modalIgualar(lista,despues){
 }
 /* botón dentro de la ficha del remito */
 function remBotonIgualar(orig,o,c){var box=$('#rmDecl');if(!box||!orig||(c.st!=='dif'&&c.st!=='nodecl'))return;
+  if(orig.soloTotal&&c.st==='nodecl'){box.insertAdjacentHTML('beforeend','<p class="hint">Sin detalle por cisterna no se puede agregar el camión al turno automáticamente: cargalo a mano en el turno.</p>');return;}
   if(!orig.conf){box.insertAdjacentHTML('beforeend','<p class="hint">Confirmá la llegada para poder igualar el turno.</p>');return;}
   box.insertAdjacentHTML('beforeend','<button class="btn small" type="button" id="rmIgualar">Igualar el turno con el remito</button>');
   $('#rmIgualar').addEventListener('click',function(){var id=orig.id;modalIgualar([orig],function(){render();modalRemito(id);});});}
@@ -4668,15 +4687,16 @@ function remAvisoTurno(id){
 }
 
 /* ---------- carga histórica: camiones completados desde el control ---------- */
-function htDesdeRem(r,base){var est=base?base.est.slice():[],cist=[],dest=base?base.dest.slice():[];
+function htDesdeRem(r,base){if(r.soloTotal){var b=base?clone(base):{hora:'',remito:r.remito,litros:0,cist:[0,0,0,0,0,0,0],est:['v','v','v','v','v','v','v'],dest:['','','','','','',''],parcial:false,motivo:''};b.hora=r.hLleg;b.remito=r.remito;b.op=r.pedido||'';b.entrega=r.entrega||'';b.fecha=r.fSal||'';return b;}var est=base?base.est.slice():[],cist=[],dest=base?base.dest.slice():[];
   for(var k=0;k<NCAM;k++){var v=+((r.cist||[])[k]||0);if(est[k]==='o'){cist.push(0);continue;}est[k]=v>0?'d':'v';cist.push(v>0?v:0);dest[k]='';}
   return {hora:r.hLleg,remito:r.remito,litros:sum(cist),cist:cist,est:est,dest:dest,parcial:base?!!base.parcial:false,motivo:base?base.motivo||'':'',op:r.pedido||'',entrega:r.entrega||'',fecha:r.fSal||''};}
 function htDif(){if(!HT)return {lst:[],n:0};var lst=[],n=0,vistos={};
   HT.cams.forEach(function(c,i){var r=remDeDist(HT.dist,c.remito);if(!r)return;vistos[r.id]=1;
     if(r.fLleg&&(r.fLleg!==HT.fecha||slotDeHora(r.hLleg)!==HT.turno)){lst.push(esc(r.remito)+': según el control llegó el '+fFecha(r.fLleg)+' a las '+esc(r.hLleg)+' (corresponde a otro turno)');return;}
     var nn=htDesdeRem(r,c),d=[];if((c.hora||'')!==(nn.hora||''))d.push('hora '+(c.hora||'—')+' → '+nn.hora);for(var k=0;k<NCAM;k++){var a=(c.est[k]||'d')==='d'?+(c.cist[k]||0):0;if(c.est[k]!=='o'&&Math.abs(a-nn.cist[k])>0.001)d.push('C'+(k+1)+' '+fmt(a)+' → '+fmt(nn.cist[k]));}
+    if(r.soloTotal){d=d.filter(function(x){return /^hora/.test(x);});var tt=sum(c.cist.filter(function(v,k){return (c.est[k]||'d')==='d';}));if(r.total!=null&&Math.abs(tt-r.total)>0.001)lst.push(esc(r.remito)+': total '+fmt(tt)+' L y la factura dice '+fmt(r.total)+' L (cargá las cisternas a mano)');}
     if(d.length){lst.push(esc(r.remito)+': '+esc(d.join(' · ')));n++;}});
-  remDeSlot(HT.dist,HT.fecha,HT.turno).forEach(function(r){if(!vistos[r.id]){lst.push(esc(r.remito)+': llegó a las '+esc(r.hLleg)+' según el control y falta en este turno');n++;}});
+  remDeSlot(HT.dist,HT.fecha,HT.turno).forEach(function(r){if(!vistos[r.id]){lst.push(esc(r.remito)+': llegó a las '+esc(r.hLleg)+' según el control y falta en este turno'+(r.soloTotal?' (solo hay total de factura: '+fmt(r.total)+' L; cargá las cisternas)':''));n++;}});
   return {lst:lst,n:n};}
 function htIgualar(){HT.cams=HT.cams.map(function(c){var r=remDeDist(HT.dist,c.remito);if(!r||(r.fLleg&&(r.fLleg!==HT.fecha||slotDeHora(r.hLleg)!==HT.turno)))return c;return htDesdeRem(r,c);});
   var ya={};HT.cams.forEach(function(c){ya[remNorm(c.remito)]=1;});remDeSlot(HT.dist,HT.fecha,HT.turno).forEach(function(r){if(!ya[r.remito])HT.cams.push(htDesdeRem(r,null));});
