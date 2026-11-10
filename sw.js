@@ -1,5 +1,5 @@
 // Control de Usina: funcionamiento sin internet
-const CACHE = 'cdu-v6.43';
+const CACHE = 'cdu-v6.44';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './favicon.png'];
 
 self.addEventListener('install', e => {
@@ -17,7 +17,9 @@ self.addEventListener('fetch', e => {
   if ((url.origin !== self.location.origin && !fuente) || url.pathname.endsWith('/exec')) return; // servidor y clima: siempre por red
   if (req.mode === 'navigate') {
     // Primero la red (para recibir actualizaciones); sin señal, la copia guardada
-    e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(k => k.put('./index.html', c)); return r; })
+    // Solo se guarda como copia la página de la app, y solo si llegó bien (nunca una página de error 404)
+    const esApp = /\/(index\.html)?$/.test(url.pathname);
+    e.respondWith(fetch(req).then(r => { if (r.ok && esApp) { const c = r.clone(); caches.open(CACHE).then(k => k.put('./index.html', c)); } return r; })
       .catch(() => caches.match('./index.html')));
     return;
   }

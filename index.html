@@ -4713,11 +4713,25 @@ function remAvisoHT(){if(!HT||!getRemitos().length)return;var card=$('#modalCard
     HT.cams[i]=htDesdeRem(r,c);pintarHT();toast('Remito '+r.remito+': hora y litros completados desde el control.');});
 }
 
-/* enlace a la telemetría de SECCO SA (grupos de Perito Moreno, Los Antiguos y San Julián) */
+/* enlace a la telemetría de SECCO SA (grupos de Perito Moreno, Los Antiguos y San Julián) · solo categoría A.
+   Desde la app instalada en el celular se abre en el navegador del teléfono (Chrome en Android, Safari en iPhone),
+   no dentro de la app. */
 var SECCO_URL='https://telemobile.secco.com.ar:4444/webapp/login.php';
-/* solo la categoría A */
 function seccoVer(u){return !!u&&catL(u)==='A';}
-function seccoLink(u){return seccoVer(u)?'<a class="ghost small tb-link" href="'+SECCO_URL+'" target="_blank" rel="noopener noreferrer" title="Telemetría de los grupos generadores de SECCO SA (Perito Moreno, Los Antiguos y San Julián). Se abre en otra pestaña con el usuario de SECCO.">SECCO App<span aria-hidden="true"> ↗</span></a>':'';}
+function seccoLink(u){return seccoVer(u)?'<a class="ghost small tb-link" id="seccoLnk" href="'+SECCO_URL+'" target="_blank" rel="noopener noreferrer" title="Telemetría de los grupos generadores de SECCO SA (Perito Moreno, Los Antiguos y San Julián). Se abre en el navegador, con el usuario de SECCO.">SECCO App<span aria-hidden="true"> ↗</span></a>':'';}
+function appInstalada(){try{return window.matchMedia('(display-mode: standalone)').matches||window.matchMedia('(display-mode: fullscreen)').matches||window.navigator.standalone===true;}catch(e){return false;}}
+function abrirEnNavegador(url){
+  var ua=navigator.userAgent||'',sinEsquema=url.replace(/^https?:\/\//,'');
+  if(/Android/i.test(ua)){
+    /* Android: se pide abrir en Chrome; si no está, Android usa el navegador predeterminado */
+    location.href='intent://'+sinEsquema+'#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(url)+';end';return;}
+  if(/iPhone|iPad|iPod/i.test(ua)||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1)){
+    /* iPhone/iPad: se abre en Safari (iOS 17 o más nuevo); si no, se abre igual en una ventana de Safari */
+    var t=setTimeout(function(){window.open(url,'_blank','noopener');},700);
+    document.addEventListener('visibilitychange',function f(){if(document.hidden){clearTimeout(t);document.removeEventListener('visibilitychange',f);}});
+    location.href='x-safari-'+url;return;}
+  window.open(url,'_blank','noopener');}
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('#seccoLnk');if(!a||!appInstalada())return;e.preventDefault();abrirEnNavegador(SECCO_URL);});
 
 })();
 </script>
