@@ -486,6 +486,22 @@ td.rm-bad,.rm-bad{color:var(--danger);font-weight:600}
 .rm-st,.rm-cist{margin-top:8px}
 .tb-link{display:inline-flex;align-items:center;gap:2px;text-decoration:none;white-space:nowrap}
 @media (max-width:560px){.tb-link span{display:none}}
+/* dashboard: todos los distritos */
+.dg-tab th,.dg-tab td{white-space:nowrap}
+.dg-tab tbody th,.dg-tab tfoot th{text-align:left}
+.dg-tab td.dg-inc{color:var(--muted);font-style:italic}
+.dg-tab tr.dg-sel th{color:var(--accent)}
+.dg-tab tfoot td,.dg-tab tfoot th{border-top:2px solid var(--line)}
+.dg-pc{position:relative;min-width:110px}
+.dg-pc .dg-bar{position:absolute;left:6px;top:50%;height:8px;transform:translateY(-50%);background:var(--accent);opacity:.18;border-radius:4px;max-width:calc(100% - 12px)}
+.dg-pc span:last-child{position:relative}
+.dg-chips{display:flex;flex-wrap:wrap;gap:6px 14px;margin:6px 0 8px}
+.dg-chip{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.tile.dg-gt b{color:var(--accent)}
+.dash .ptitle .toolbar .seg{align-self:flex-end}
+.dg-tab th:first-child{position:sticky;left:0;background:var(--sheet);z-index:1}
+.dg-tab td,.dg-tab th{padding-left:8px;padding-right:8px}
+.dg-pc .dg-bar{top:auto;bottom:5px;height:3px;transform:none;opacity:.45}
 </style>
 </head>
 <body>
@@ -3785,7 +3801,8 @@ function leyenda(items){return '<div class="cleg">'+items.map(function(x){return
 function tablaHTML(cab,filas){return '<details class="ctab"><summary>Ver tabla</summary><div class="tablewrap"><table><thead><tr>'+cab.map(function(c){return '<th>'+esc(c)+'</th>';}).join('')+'</tr></thead><tbody>'+filas.map(function(f){return '<tr>'+f.map(function(v,i){return '<td'+(i?' class="n"':'')+'>'+(v==null?'—':esc(typeof v==='number'?fmt(v):v))+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div></details>';}
 
 var dashMsg={};
-function viewDash(main){
+function viewDash(main){if(dashModo==='gen'){viewDashGen(main);return;}viewDashDist(main);var tb=$('.dash .ptitle .toolbar');if(tb){tb.insertAdjacentHTML('afterbegin',dgSegHTML());dgSegBind(main);}}
+function viewDashDist(main){
   var dist=SELD,hoy=todayISO(),dias=dashRango==='todo'?1100:dashRango==='anio'?Math.round((new Date(hoy)-new Date(hoy.slice(0,4)+'-01-01'))/864e5)+1:+dashRango,desde=addDays(hoy,-dias+1);
   main.innerHTML='<div class="wrap wide panel dash"><div class="ptitle"><div><h1>Dashboard</h1><p>'+esc(distName(dist))+' · consumo, camiones, existencias y temperatura</p></div>'+
     '<div class="toolbar"><div class="field"><label for="dsR">Período</label><select id="dsR">'+[['90','Últimos 90 días'],['365','Últimos 12 meses'],['anio','Año '+hoy.slice(0,4)],['todo','Todo el histórico']].map(function(o){return '<option value="'+o[0]+'"'+(dashRango===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></div><button class="ghost" type="button" id="dsAct">Actualizar datos</button></div></div>'+
@@ -4732,6 +4749,83 @@ function abrirEnNavegador(url){
     location.href='x-safari-'+url;return;}
   window.open(url,'_blank','noopener');}
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('#seccoLnk');if(!a||!appInstalada())return;e.preventDefault();abrirEnNavegador(SECCO_URL);});
+
+/* =====================================================================
+   DASHBOARD · TODOS LOS DISTRITOS
+   Consumo de combustible de todas las usinas, mes a mes y anual, y la
+   participación de un grupo de distritos sobre el total.
+   Consumo = el mismo del dashboard por distrito: declarado con la
+   corrección del superior, solo días completos (los 4 turnos).
+   ===================================================================== */
+var dashModo=sget('cpt.dashModo','gen'),dgAnio=todayISO().slice(0,4),dgSel=sget('cpt.dgSel',['36','39']),dgCarga={},dgW=0;
+function dgKey(a){return 'cpt.dgen.'+a;}
+function dgDatos(a){return sget(dgKey(a),null);}
+/* sin servidor (demostración): se calcula con los turnos del equipo */
+function dgLocal(a){var dias={};
+  getTurnos().forEach(function(t){if(!t.fecha||t.fecha.slice(0,4)!==a)return;var k=t.dist+'|'+t.fecha,d=dias[k]=dias[k]||{dist:t.dist,f:t.fecha,n:0,dec:0,aj:0,ing:0,cam:0};
+    d.n++;d.dec+=(t.consDecl!=null?t.consDecl:t.consumo)||0;d.ing+=t.ingresos||0;d.cam+=(t.camiones||[]).length;if(t.turno===1&&t.ajusteDia&&t.ajusteDia.litros!=null)d.aj=t.ajusteDia.litros;});
+  var m={};Object.keys(dias).forEach(function(k){var d=dias[k],mk=d.dist+'|'+d.f.slice(0,7),o=m[mk]=m[mk]||{dist:d.dist,mes:d.f.slice(0,7),dec:0,dias:0,ing:0,cam:0};
+    if(d.n===4){o.dec+=d.dec+d.aj;o.dias++;}o.ing+=d.ing;o.cam+=d.cam;});
+  return {ts:new Date().toISOString(),local:true,filas:Object.keys(m).map(function(k){return m[k];})};}
+function dgCargar(a,manual){
+  if(DEMO||!cfg.syncUrl){sset(dgKey(a),dgLocal(a));if(VIEW==='dash')render();return;}
+  dgCarga[a]=true;var msg=$('#dgMsg');if(msg)msg.textContent='Trayendo el consumo de todos los distritos…';
+  getJSON({accion:'resumenGeneral',anio:a}).then(function(r){sset(dgKey(a),{ts:new Date().toISOString(),filas:r.filas||[]});dgCarga[a]=false;if(manual)toast('Consumo de todos los distritos actualizado.');if(VIEW==='dash'&&dashModo==='gen')render();})
+    .catch(function(e){dgCarga[a]=false;var m=$('#dgMsg');if(m){m.textContent='No se pudo traer el consumo: '+e.message+(dgDatos(a)?' Se muestran los últimos datos guardados.':'');m.classList.add('warn');}});}
+function diasDelMes(mes){var y=+mes.slice(0,4),m=+mes.slice(5,7);return new Date(y,m,0).getDate();}
+/** días que deberían tener datos en ese mes (el mes en curso, hasta ayer) */
+function diasEsperados(mes){var hoy=todayISO();if(mes>hoy.slice(0,7))return 0;if(mes===hoy.slice(0,7))return Math.max(0,+hoy.slice(8,10)-1);return diasDelMes(mes);}
+function dgSegHTML(){return '<div class="seg" role="group" aria-label="Vista del dashboard"><button type="button" data-dm="gen" aria-pressed="'+(dashModo==='gen')+'">Todos los distritos</button><button type="button" data-dm="dist" aria-pressed="'+(dashModo==='dist')+'">Por distrito</button></div>';}
+function dgSegBind(main){$$('[data-dm]').forEach(function(b){b.addEventListener('click',function(){dashModo=b.dataset.dm;sset('cpt.dashModo',dashModo);render();});});}
+function pct(v,t){return t?v/t*100:null;}
+function fPct(v){return v==null?'—':(Math.round(v*10)/10).toFixed(1).replace('.',',')+' %';}
+function viewDashGen(main){
+  var a=dgAnio,dat=dgDatos(a),ds=usinas(),hoy=todayISO();
+  var anios=[];for(var y=+hoy.slice(0,4);y>=2025;y--)anios.push(String(y));
+  main.innerHTML='<div class="wrap wide panel dash"><div class="ptitle"><div><h1>Dashboard</h1><p>Todos los distritos · consumo de combustible mes a mes y anual</p></div>'+
+    '<div class="toolbar">'+dgSegHTML()+'<div class="field"><label for="dgA">Año</label><select id="dgA">'+anios.map(function(y){return '<option'+(y===a?' selected':'')+'>'+y+'</option>';}).join('')+'</select></div><button class="ghost" type="button" id="dgAct">Actualizar datos</button></div></div>'+
+    '<p class="hint" id="dgMsg"></p><div id="dgBody"></div></div>';
+  dgSegBind(main);
+  $('#dgA').addEventListener('change',function(e){dgAnio=e.target.value;render();});
+  $('#dgAct').addEventListener('click',function(){dgCargar(a,true);});
+  var viejo=!dat||(Date.now()-new Date(dat.ts))>3*3600e3;
+  if(viejo&&!dgCarga[a])dgCargar(a,false);
+  if(!dat){$('#dgBody').innerHTML='<p class="empty">Trayendo datos…</p>';return;}
+  $('#dgMsg').textContent='Consumo declarado con la corrección del superior, sumando solo los días completos (los 4 turnos cargados). Datos del '+fFH(dat.ts)+'.';
+  /* matriz distrito × mes */
+  var M={},dias={},tot={},totMes=[],totAn=0,meses=[];for(var i=1;i<=12;i++)meses.push(a+'-'+pad2(i));
+  (dat.filas||[]).forEach(function(f){if(ds.indexOf(String(f.dist))<0)return;M[f.dist+'|'+f.mes]=f.dec;dias[f.dist+'|'+f.mes]=f.dias;});
+  ds.forEach(function(d){tot[d]=0;meses.forEach(function(m){tot[d]+=M[d+'|'+m]||0;});totAn+=tot[d];});
+  meses.forEach(function(m,i){totMes[i]=0;ds.forEach(function(d){totMes[i]+=M[d+'|'+m]||0;});});
+  var conDatos=meses.filter(function(m,i){return totMes[i]>0;}),orden=ds.slice().sort(function(x,y){return tot[y]-tot[x];}),mayor=orden[0];
+  var sel=dgSel.filter(function(d){return ds.indexOf(d)>=0;}),grp=meses.map(function(m){var s=0;sel.forEach(function(d){s+=M[d+'|'+m]||0;});return s;}),grpAn=sum(grp);
+  var nomG=sel.map(function(d){return D(d).n;}).join(' + ')||'ningún distrito';
+  function celda(d,m){var v=M[d+'|'+m],n=dias[d+'|'+m],e=diasEsperados(m);if(!v)return '<td class="n">—</td>';var inc=n<e;return '<td class="n'+(inc?' dg-inc':'')+'"'+(inc?' title="'+n+' de '+e+' días con datos"':'')+'>'+fmt(Math.round(v))+'</td>';}
+  var mc=MESES.map(function(x){return x.charAt(0).toUpperCase()+x.slice(1,3);});
+  /* la tabla muestra hasta el último mes con datos, para que entre en la pantalla */
+  var ult=-1;totMes.forEach(function(v,i){if(v>0)ult=i;});var nv=ult<0?12:ult+1,mv=meses.slice(0,nv),mcv=mc.slice(0,nv);
+  var tabla='<div class="tablewrap"><table class="dg-tab"><thead><tr><th>Distrito</th>'+mcv.map(function(x){return '<th>'+x+'</th>';}).join('')+'<th>Total '+a+'</th><th>% del total</th></tr></thead><tbody>'+
+    orden.map(function(d){var p=pct(tot[d],totAn);return '<tr'+(sel.indexOf(d)>=0?' class="dg-sel"':'')+'><th scope="row">'+esc(D(d).n)+'</th>'+mv.map(function(m){return celda(d,m);}).join('')+'<td class="n"><b>'+(tot[d]?fmt(Math.round(tot[d])):'—')+'</b></td><td class="dg-pc"><span class="dg-bar" style="width:'+(p?Math.max(2,p):0)+'%"></span><span>'+fPct(p)+'</span></td></tr>';}).join('')+
+    '</tbody><tfoot><tr><th scope="row">Total</th>'+totMes.slice(0,nv).map(function(v){return '<td class="n"><b>'+(v?fmt(Math.round(v)):'—')+'</b></td>';}).join('')+'<td class="n"><b>'+fmt(Math.round(totAn))+'</b></td><td class="dg-pc"><span>100 %</span></td></tr></tfoot></table></div>';
+  var chips=ds.map(function(d){return '<label class="dg-chip"><input type="checkbox" data-dg="'+d+'"'+(sel.indexOf(d)>=0?' checked':'')+'> '+esc(D(d).n)+'</label>';}).join('');
+  var grupoT='<div class="tablewrap"><table><thead><tr><th>Mes</th><th>'+esc(nomG)+'</th><th>Todos los distritos</th><th>Participación</th></tr></thead><tbody>'+
+    meses.map(function(m,i){if(!totMes[i])return '';return '<tr><td>'+fMes(m)+'</td><td class="n">'+fmt(Math.round(grp[i]))+'</td><td class="n">'+fmt(Math.round(totMes[i]))+'</td><td class="n"><b>'+fPct(pct(grp[i],totMes[i]))+'</b></td></tr>';}).join('')+
+    '</tbody><tfoot><tr><th scope="row">Año '+a+'</th><td class="n"><b>'+fmt(Math.round(grpAn))+'</b></td><td class="n"><b>'+fmt(Math.round(totAn))+'</b></td><td class="n"><b>'+fPct(pct(grpAn,totAn))+'</b></td></tr></tfoot></table></div>';
+  $('#dgBody').innerHTML=(!totAn?'<p class="empty">No hay consumos cargados en '+a+'.</p>':
+    '<div class="tiles"><div class="tile hero"><span>Consumo total '+a+' · todos los distritos</span><b>'+fmt(Math.round(totAn))+' L</b><small>'+conDatos.length+' mes(es) con datos · '+fmt(Math.round(totAn/(conDatos.length||1)))+' L por mes en promedio</small></div>'+
+      '<div class="tile"><span>Mayor consumo</span><b>'+esc(D(mayor).n)+'</b><small>'+fmt(Math.round(tot[mayor]))+' L · '+fPct(pct(tot[mayor],totAn))+'</small></div>'+
+      '<div class="tile dg-gt"><span>'+esc(nomG)+'</span><b>'+fPct(pct(grpAn,totAn))+'</b><small>'+fmt(Math.round(grpAn))+' L del total</small></div>'+
+      '<div class="tile"><span>Último mes con datos</span><b>'+(conDatos.length?fmt(Math.round(totMes[meses.indexOf(conDatos[conDatos.length-1])])):'—')+' L</b><small>'+(conDatos.length?fMes(conDatos[conDatos.length-1]):'')+'</small></div>'+
+      '<div class="tile"><span>Distritos con datos</span><b>'+ds.filter(function(d){return tot[d]>0;}).length+' de '+ds.length+'</b><small>'+ds.filter(function(d){return !tot[d];}).map(function(d){return D(d).n;}).join(', ')+(ds.some(function(d){return !tot[d];})?' sin datos':'')+'</small></div></div>'+
+    '<div class="card block"><h4>Consumo por distrito, mes a mes</h4><p class="hint">Litros. En gris, los meses con días sin cargar (pasá el mouse para ver cuántos): el total de ese mes queda por debajo del real.</p>'+tabla+'</div>'+
+    '<div class="card block"><h4>Participación de un grupo de distritos</h4><p class="hint">Marcá los distritos que querés sumar: se compara su consumo con el de todas las localidades.</p><div class="dg-chips">'+chips+'</div>'+
+      '<div class="row-end"><button class="ghost small" type="button" data-dgq="36,39">Perito Moreno + Los Antiguos</button><button class="ghost small" type="button" data-dgq="">Ninguno</button><button class="ghost small" type="button" data-dgq="todos">Todos</button></div>'+
+      leyenda([['s1','Todos los distritos'],['s2','Grupo marcado']])+'<div id="dgCh" class="chart"></div>'+grupoT+'</div>');
+  $$('[data-dg]').forEach(function(c){c.addEventListener('change',function(){var d=c.dataset.dg;dgSel=dgSel.filter(function(x){return x!==d;});if(c.checked)dgSel.push(d);sset('cpt.dgSel',dgSel);render();});});
+  $$('[data-dgq]').forEach(function(b){b.addEventListener('click',function(){var q=b.dataset.dgq;dgSel=q==='todos'?ds.slice():q?q.split(','):[];sset('cpt.dgSel',dgSel);render();});});
+  var ch=$('#dgCh');if(ch){dgW=ch.clientWidth;chartBars(ch,{cats:mc,series:[{n:'Todos los distritos',cls:'s1',v:totMes.map(function(v){return v?Math.round(v):null;})},{n:nomG,cls:'s2',v:grp.map(function(v,i){return totMes[i]?Math.round(v):null;})}],unidad:'L',titulo:'Consumo por mes'});}
+}
+window.addEventListener('resize',function(){if(VIEW!=='dash'||dashModo!=='gen')return;clearTimeout(window._dgRz);window._dgRz=setTimeout(function(){var c=$('#dgCh');if(c&&Math.abs(c.clientWidth-dgW)>8){var y=window.scrollY;render();window.scrollTo(0,y);}},200);});
 
 })();
 </script>
