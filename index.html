@@ -502,6 +502,9 @@ td.rm-bad,.rm-bad{color:var(--danger);font-weight:600}
 .dg-tab th:first-child{position:sticky;left:0;background:var(--sheet);z-index:1}
 .dg-tab td,.dg-tab th{padding-left:8px;padding-right:8px}
 .dg-pc .dg-bar{top:auto;bottom:5px;height:3px;transform:none;opacity:.45}
+.py-up{align-self:flex-end;display:inline-flex;align-items:center;cursor:pointer}
+.py-rev select{min-width:120px}
+.py-rev input.num{min-width:90px;max-width:110px;text-align:right}
 </style>
 </head>
 <body>
@@ -2967,9 +2970,10 @@ function sugerir(p,prev){
 function viewPedidos(main){
   var A=isA(),hoy=todayISO();if(!pedSem)pedSem=juevesDe(hoy);
   main.innerHTML='<div class="wrap wide panel"><div class="ptitle"><div><h1>Pedidos</h1><p>'+(A?'Programa semanal de todos los distritos, N° de pedido de YPF por camión y pedidos de lubricante.':'Programa semanal de gasoil (se envía los jueves después de la medición de las 12:00) y pedidos de lubricante de '+esc(distName(SELD))+'.')+'</p></div>'+
-    '<div class="toolbar"><div class="field"><label for="pdJue">Semana (jueves)</label><input id="pdJue" type="date" value="'+pedSem+'"></div><button class="ghost" type="button" id="pdSync">Actualizar</button></div></div><div id="pdBody"></div></div>';
+    '<div class="toolbar">'+(A?'<label class="btn sec rm-file py-up" title="Excel «Pedidos» descargado del portal de YPF">Subir pedidos de YPF<input type="file" id="pdYpf" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label>':'')+'<div class="field"><label for="pdJue">Semana (jueves)</label><input id="pdJue" type="date" value="'+pedSem+'"></div><button class="ghost" type="button" id="pdSync">Actualizar</button></div></div><div id="pdBody"></div></div>';
   $('#pdJue').addEventListener('change',function(e){if(e.target.value){pedSem=juevesDe(e.target.value);pedTmp=null;render();}});
   $('#pdSync').addEventListener('click',function(){pullPedidos(true).then(function(){render();});});
+  if($('#pdYpf'))$('#pdYpf').addEventListener('change',function(e){var f=e.target.files[0];e.target.value='';if(f)subirPedidosYPF(f);});
   if(A&&pedOfi)pedidosB($('#pdBody'),pedOfi,true);else if(A)pedidosA($('#pdBody'));else pedidosB($('#pdBody'));
 }
 /* ---------- B: programa semanal ---------- */
@@ -4478,7 +4482,8 @@ function revisarArchivos(ds){
 function leerXlsx(file){
   if(typeof JSZip==='undefined')return Promise.reject(new Error('Falta el componente de Excel.'));
   return file.arrayBuffer().then(function(b){return JSZip.loadAsync(b);}).then(function(z){
-    var tx=function(p){var f=z.file(p);return f?f.async('string'):Promise.resolve(null);};
+    /* algunos sistemas (como el portal de YPF) guardan el XML con BOM: se quita para poder leerlo */
+    var tx=function(p){var f=z.file(p);return f?f.async('string').then(function(t){return t.replace(/^\uFEFF/,'');}):Promise.resolve(null);};
     return Promise.all([tx('xl/workbook.xml'),tx('xl/_rels/workbook.xml.rels'),tx('xl/sharedStrings.xml')]).then(function(t){
       var wb=parseX(t[0]),rels=parseX(t[1]),ss=[];
       if(t[2]){var sd=parseX(t[2]);Array.prototype.forEach.call(sd.getElementsByTagNameNS(NS_M,'si'),function(si){ss.push(Array.prototype.map.call(si.getElementsByTagNameNS(NS_M,'t'),function(x){return x.textContent;}).join(''));});}
@@ -4826,6 +4831,81 @@ function viewDashGen(main){
   var ch=$('#dgCh');if(ch){dgW=ch.clientWidth;chartBars(ch,{cats:mc,series:[{n:'Todos los distritos',cls:'s1',v:totMes.map(function(v){return v?Math.round(v):null;})},{n:nomG,cls:'s2',v:grp.map(function(v,i){return totMes[i]?Math.round(v):null;})}],unidad:'L',titulo:'Consumo por mes'});}
 }
 window.addEventListener('resize',function(){if(VIEW!=='dash'||dashModo!=='gen')return;clearTimeout(window._dgRz);window._dgRz=setTimeout(function(){var c=$('#dgCh');if(c&&Math.abs(c.clientWidth-dgW)>8){var y=window.scrollY;render();window.scrollTo(0,y);}},200);});
+
+/* =====================================================================
+   PEDIDOS · SUBIR EL EXCEL DE PEDIDOS DE YPF (solo categoría A)
+   El archivo del portal trae N° de pedido, destino de mercancía, fecha y
+   hora del pedido y estado. No trae litros ni fecha de despacho: se toman
+   del programa semanal del distrito (día pedido y litros, en orden) y, si
+   el distrito no mandó programa, de su camión habitual. Todo se revisa
+   y se puede cambiar antes de cargarlo.
+   ===================================================================== */
+function distDeYPF(txt){var c=(String(txt||'').match(/\b(2000\d{6})\b/)||[])[1];if(c){var d=usinas().concat(['31']).filter(function(x){return ypfDe(x)===c;})[0];if(d)return d;}
+  return typeof distEnTexto==='function'?distEnTexto(String(txt||'').split(' - ').slice(-1)[0]):'';}
+function fechaYPF(v){if(typeof v==='number')return xFecha(v);var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(v||'').trim());return m?m[3]+'-'+pad2(+m[2])+'-'+pad2(+m[1]):'';}
+/* camión habitual del distrito: lo más repetido en sus últimos pedidos; si no hay, el de los remitos */
+function litrosHabitual(dist){var vs=getOPsGas(dist).filter(function(o){return o.cant>0;}).sort(function(a,b){return a.fechaDespacho<b.fechaDespacho?1:-1;}).slice(0,10).map(function(o){return o.cant;});
+  if(!vs.length&&typeof getRemitos==='function')vs=getRemitos().filter(function(r){return r.dist===dist&&r.total>0;}).slice(-10).map(function(r){return CAMIONES_TIPO.reduce(function(b,c){return Math.abs(c-r.total)<Math.abs(b-r.total)?c:b;},36000);});
+  if(!vs.length)return 36000;var cnt={};vs.forEach(function(v){cnt[v]=(cnt[v]||0)+1;});return +Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a]||b-a;})[0];}
+function leerPedidosYPF(file){
+  return leerXlsx(file).then(function(hs){var out=[],err=[];
+    hs.forEach(function(h){var hi=-1,col={};
+      for(var i=0;i<Math.min(h.rows.length,10);i++){var r=h.rows[i]||[];if(r.some(function(v){return /^N\s*PEDIDO$/.test(normTxt(v));})){hi=i;r.forEach(function(v,j){col[normTxt(v)]=j;});break;}}
+      if(hi<0)return;var g=function(r,n){return col[n]!=null?r[col[n]]:null;};
+      for(var j=hi+1;j<h.rows.length;j++){var r2=h.rows[j];if(!r2)continue;var n=soloDig(g(r2,'N PEDIDO'));if(!n)continue;
+        var dest=String(g(r2,'DESTINO DE MERCANCIA')||''),d=distDeYPF(dest),area=String(g(r2,'AREA DE VENTA')||'');
+        if(!d){err.push('Pedido '+n+': no se reconoce el destino «'+dest+'»');continue;}
+        out.push({nPedido:n,dist:d,destTxt:dest,lub:/lubric/i.test(area),fechaPedido:fechaYPF(g(r2,'FECHA PEDIDO')),hora:remHora(g(r2,'HORA PEDIDO'))||'',estado:String(g(r2,'ESTADO')||'').trim(),solicitante:String(g(r2,'SOLICITANTE')||'').trim()});}});
+    return {filas:out,errs:err};});}
+function subirPedidosYPF(file){
+  leerPedidosYPF(file).then(function(x){if(!x.filas.length){toast(x.errs.length?x.errs[0]:'El archivo no tiene la columna «N° Pedido».');return;}revisarPedidosYPF(x,file.name);})
+    .catch(function(e){toast('No se pudo leer el archivo: '+e.message);});}
+function revisarPedidosYPF(x,nombre){
+  var ops=getOPsAll(),porN={};ops.forEach(function(o){porN[o.nPedido]=o;});
+  var fp=x.filas.map(function(f){return f.fechaPedido;}).filter(Boolean).sort(),jue=juevesDe(fp[0]||todayISO()),dias=diasPedido(jue);
+  var ya=x.filas.filter(function(f){return porN[f.nPedido];}),nuevos=x.filas.filter(function(f){return !porN[f.nPedido]&&!f.lub;}),lubs=x.filas.filter(function(f){return !porN[f.nPedido]&&f.lub;});
+  /* reparto: pedidos del distrito en orden de número → días del programa con litros y sin OP, en orden de fecha */
+  var porD={};nuevos.sort(function(a,b){return a.nPedido<b.nPedido?-1:1;}).forEach(function(f){(porD[f.dist]=porD[f.dist]||[]).push(f);});
+  Object.keys(porD).forEach(function(d){var p=getPedidos(d).filter(function(q){return q.id===idPG(d,jue)&&q.estado!=='borrador';})[0],libres=[];
+    if(p)p.dias.forEach(function(dd,i){if(!(dd.litros>0))return;var nya=getOPsGas(d).filter(function(o){return o.fechaDespacho===dias[i]&&o.estado!=='Anulado';}).length;
+      /* un día puede pedir más de un camión: se reparte de a un camión habitual */
+      var hab=litrosHabitual(d),resto=dd.litros,k=0;while(resto>0&&k<4){var l=resto>hab*1.2?hab:resto;if(k>=nya)libres.push({f:dias[i],l:l});resto-=l;k++;}});
+    porD[d].forEach(function(f,i){var s=libres[i];if(s){f.fechaDespacho=s.f;f.cant=s.l;f.origen='programa';}else{f.fechaDespacho='';f.cant=litrosHabitual(d);f.origen=p?'sobra':'habitual';}});});
+  var hayFalta=nuevos.some(function(f){return !f.fechaDespacho;});
+  var optDias=function(sel){return '<option value="">Elegí…</option>'+dias.map(function(f,i){return '<option value="'+f+'"'+(f===sel?' selected':'')+'>'+DIAS_SEM[i]+' '+fFecha(f).slice(0,5)+'</option>';}).join('');};
+  var ORIG={programa:'<span class="chip g">del programa</span>',habitual:'<span class="chip y">sin programa: camión habitual</span>',sobra:'<span class="chip y">más pedidos que días en el programa</span>'};
+  openModal('<h3>Pedidos de YPF · '+esc(nombre)+'</h3>'+
+    '<p class="hint">Semana del jueves '+fFecha(jue)+' (despachos del '+fFecha(dias[0])+' al '+fFecha(dias[6])+'). El archivo de YPF no trae litros ni fecha de despacho: se toman del <b>programa</b> que mandó cada distrito, en orden (el pedido de número más bajo va al primer día pedido). Si el distrito no mandó programa, se propone su <b>camión habitual</b> y falta elegir el día. Revisá y corregí antes de cargar.</p>'+
+    '<div class="stats"><div class="stat"><b>'+x.filas.length+'</b><span>Pedidos en el archivo</span></div><div class="stat"><b>'+nuevos.length+'</b><span>Nuevos</span></div><div class="stat"><b>'+ya.length+'</b><span>Ya cargados</span></div>'+(lubs.length?'<div class="stat"><b>'+lubs.length+'</b><span>De lubricante</span></div>':'')+'</div>'+
+    (x.errs.length?'<div class="banner warn"><span>'+x.errs.map(esc).join('<br>')+'</span></div>':'')+
+    (nuevos.length?'<div class="tablewrap"><table class="rm-rev py-rev"><thead><tr><th><input type="checkbox" id="pyTodo" checked aria-label="Todos"></th><th>N° de pedido</th><th>Distrito</th><th>Pedido el</th><th>Despacho (llegada)</th><th>Litros</th><th>Camión compartido</th><th>De dónde sale</th></tr></thead><tbody>'+
+      nuevos.map(function(f,i){return '<tr><td><input type="checkbox" data-py="'+i+'" checked></td><td><b>'+esc(f.nPedido)+'</b><br><small class="hint">'+esc(f.estado)+'</small></td><td>'+esc(D(f.dist).n)+'</td><td>'+fFecha(f.fechaPedido)+' '+esc(f.hora)+'</td>'+
+        '<td><select data-pyf="'+i+'">'+optDias(f.fechaDespacho)+'</select></td><td><input data-pyl="'+i+'" class="num" inputmode="numeric" value="'+fmt(f.cant)+'"></td><td><input data-pyg="'+i+'" placeholder="Ej.: PM-BC 19/11" list="pyGr"></td><td>'+ORIG[f.origen]+'</td></tr>';}).join('')+'</tbody></table></div>'+
+      '<datalist id="pyGr"></datalist>'+
+      (hayFalta?'<div class="row-end"><button class="ghost small" type="button" id="pyRep" title="Usa los mismos días que la semana anterior; si no hay, los reparte en la semana">Proponer día a los que no tienen</button></div>':''):'<p class="banner ok"><span>No hay pedidos nuevos de gasoil en el archivo.</span></p>')+
+    (ya.length?'<details class="rm-hist"><summary>Ya cargados ('+ya.length+'): se actualiza el estado</summary><ul>'+ya.map(function(f){var o=porN[f.nPedido];return '<li><b>'+esc(f.nPedido)+'</b> · '+esc(D(o.dist||f.dist).n)+' · '+esc(o.estado||'—')+(f.estado&&f.estado!==o.estado?' → <b>'+esc(f.estado)+'</b>':' (sin cambios)')+'</li>';}).join('')+'</ul></details>':'')+
+    (lubs.length?'<p class="hint">Los pedidos de lubricante ('+lubs.map(function(f){return f.nPedido;}).join(', ')+') no se cargan desde acá: usá «Cargar pedido de lubricante».</p>':'')+
+    '<p class="login-msg" id="pyMsg" role="alert"></p><div class="row-end"><button class="btn" type="button" data-close>Cancelar</button><button class="btn primary" type="button" id="pyOk">Cargar</button></div>');
+  if($('#pyTodo'))$('#pyTodo').addEventListener('change',function(e){$$('[data-py]').forEach(function(c){c.checked=e.target.checked;});});
+  if($('#pyRep'))$('#pyRep').addEventListener('click',function(){var g={};nuevos.forEach(function(f,i){var s=document.querySelector('[data-pyf="'+i+'"]');if(!s.value)(g[f.dist]=g[f.dist]||[]).push(s);});
+    Object.keys(g).forEach(function(d){var ss=g[d],n=ss.length,usados=nuevos.map(function(f,i){return f.dist===d?document.querySelector('[data-pyf="'+i+'"]').value:'';}).filter(Boolean);
+      /* primero, los mismos días de la semana en que llegaron sus camiones la semana anterior */
+      var antes=getOPsGas(d).filter(function(o){return o.fechaDespacho>=addDays(dias[0],-7)&&o.fechaDespacho<=addDays(dias[6],-7)&&o.estado!=='Anulado';}).map(function(o){return addDays(o.fechaDespacho,7);}).sort();
+      var libres=dias.filter(function(f){return usados.indexOf(f)<0;});if(!libres.length)libres=dias;
+      ss.forEach(function(s,k){var f=antes.filter(function(x){return usados.indexOf(x)<0;})[0];if(f){s.value=f;usados.push(f);}else s.value=libres[Math.min(libres.length-1,Math.floor((k+0.5)*libres.length/n))];});});});
+  $('#pyOk').addEventListener('click',function(){var u=me(),ts=new Date().toISOString(),msg=$('#pyMsg'),sel=[],err='';
+    nuevos.forEach(function(f,i){var c=document.querySelector('[data-py="'+i+'"]');if(!c||!c.checked)return;var de=document.querySelector('[data-pyf="'+i+'"]').value,l=parseAR(document.querySelector('[data-pyl="'+i+'"]').value);
+      if(!de){err='Falta el día de despacho del pedido '+f.nPedido+' ('+D(f.dist).n+').';return;}if(!(l>0)){err='Faltan los litros del pedido '+f.nPedido+'.';return;}
+      sel.push({id:'OP-'+f.nPedido,nPedido:f.nPedido,dist:f.dist,destinatario:ypfDe(f.dist),producto:'DIESEL 500',cant:l,fechaPedido:f.fechaPedido,hora:f.hora,fechaDespacho:de,estado:ESTADOS_YPF.indexOf(f.estado)>=0?f.estado:(f.estado||'En tratamiento'),
+        grupo:document.querySelector('[data-pyg="'+i+'"]').value.trim(),nota:'Cargado desde el Excel de pedidos de YPF ('+nombre+')',actualizado:ts,por:{legajo:u.legajo,nombre:u.nombre}});});
+    if(err){msg.textContent=err;return;}
+    var a=getOPsAll(),idx={};a.forEach(function(o,i){idx[o.nPedido]=i;});var cambiados=[];
+    ya.forEach(function(f){var o=a[idx[f.nPedido]];if(o&&f.estado&&f.estado!==o.estado){o.estado=f.estado;o.actualizado=ts;o.por={legajo:u.legajo,nombre:u.nombre};cambiados.push(o.id);}});
+    sel.forEach(function(o){a.push(o);});saveOPs(a);
+    if(!DEMO)sel.map(function(o){return o.id;}).concat(cambiados).forEach(function(id){queueAdd('op',id,{auth:authNow()});});
+    sel.forEach(function(o){getPedidos(o.dist).forEach(function(q){if(q.tipo==='gasoil')revisarCargado(q);});});
+    pedSem=jue;closeModal();sync(false);toast((sel.length?sel.length+' pedido(s) cargado(s)':'Sin pedidos nuevos')+(cambiados.length?' · '+cambiados.length+' estado(s) actualizado(s)':'')+'.');render();});
+}
 
 })();
 </script>
